@@ -1,7 +1,8 @@
 use windows::{
     core::{Result, HSTRING, PCWSTR},
     Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegSetValueExW, HKEY, KEY_WRITE, REG_OPTION_NON_VOLATILE, REG_SZ
+        RegCloseKey, RegCreateKeyExW, RegDeleteTreeW, RegSetValueExW, HKEY, KEY_WRITE,
+        REG_OPTION_NON_VOLATILE, REG_SZ,
     },
 };
 
@@ -46,7 +47,7 @@ impl RegKey for HKEY {
                 PCWSTR(value_name_w.as_ptr()),
                 0,
                 REG_SZ,
-                Some(value_w.as_slice())
+                Some(value_w.as_slice()),
             );
 
             check_win32!(result)

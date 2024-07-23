@@ -1,17 +1,16 @@
 use windows::{
-    core::{
-        w, Interface, Result, GUID, PCWSTR
+    core::{w, Interface, Result, GUID, PCWSTR},
+    Win32::{
+        Foundation::{HMODULE, MAX_PATH},
+        System::{
+            Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
+            LibraryLoader::{
+                GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            },
+        },
+        UI::WindowsAndMessaging::{MessageBoxW, MB_OK},
     },
-    Win32::{Foundation::{HMODULE, MAX_PATH}, System::{
-        Com::{
-            CoCreateInstance,
-            CLSCTX_INPROC_SERVER
-        }, LibraryLoader::{
-            GetModuleFileNameW,
-            GetModuleHandleExW,
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT
-        }
-    }, UI::WindowsAndMessaging::{MessageBoxW, MB_OK}},
 };
 
 pub trait GUIDExt {
@@ -37,16 +36,15 @@ impl GUIDExt for GUID {
     }
 }
 
-
 pub fn co_create_inproc<T: Interface>(clsid: &GUID) -> Result<T> {
-    let iface: T = unsafe {
-        CoCreateInstance(clsid, None, CLSCTX_INPROC_SERVER)?
-    };
-    Ok(iface)
+    Ok(unsafe { CoCreateInstance(clsid, None, CLSCTX_INPROC_SERVER)? })
 }
 
 pub fn to_wide(s: &str) -> Vec<u8> {
-    let mut wide: Vec<u8> = s.encode_utf16().flat_map(|c| c.to_le_bytes()).collect::<Vec<u8>>();
+    let mut wide: Vec<u8> = s
+        .encode_utf16()
+        .flat_map(|c| c.to_le_bytes())
+        .collect::<Vec<u8>>();
     wide.push(0);
     wide
 }
@@ -54,7 +52,7 @@ pub fn to_wide(s: &str) -> Vec<u8> {
 pub fn to_wide_16(s: &str) -> Vec<u16> {
     let mut wide: Vec<u16> = s.encode_utf16().collect();
     wide.push(0);
-    return wide
+    return wide;
 }
 
 pub fn get_module_path() -> String {

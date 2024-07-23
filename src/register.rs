@@ -1,31 +1,35 @@
-use windows::{
-    core::{
-        w, Result, GUID
-    },
-    Win32::{Globalization::LocaleNameToLCID, System::Registry::HKEY_CLASSES_ROOT, UI::{Input::KeyboardAndMouse::HKL, TextServices::{
-        CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, ITfCategoryMgr, ITfInputProcessorProfileMgr, GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER, GUID_TFCAT_TIPCAP_COMLESS, GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT, GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT, GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT, GUID_TFCAT_TIPCAP_UIELEMENTENABLED, GUID_TFCAT_TIP_KEYBOARD
-    }}}
-};
 use crate::utils::{
-    globals::{
-        CLSID_PREFIX, GUID_PROFILE, GUID_TEXT_SERVICE, INPROC_SUFFIX, SERVICE_NAME
-    }, registry::RegKey, winutils::{
-        alert, co_create_inproc, to_wide_16, GUIDExt
-    }
+    globals::{CLSID_PREFIX, GUID_PROFILE, GUID_TEXT_SERVICE, INPROC_SUFFIX, SERVICE_NAME},
+    registry::RegKey,
+    winutils::{alert, co_create_inproc, to_wide_16, GUIDExt},
+};
+use windows::{
+    core::{w, Result, GUID},
+    Win32::{
+        Globalization::LocaleNameToLCID,
+        System::Registry::HKEY_CLASSES_ROOT,
+        UI::{
+            Input::KeyboardAndMouse::HKL,
+            TextServices::{
+                CLSID_TF_CategoryMgr, CLSID_TF_InputProcessorProfiles, ITfCategoryMgr,
+                ITfInputProcessorProfileMgr, GUID_TFCAT_DISPLAYATTRIBUTEPROVIDER,
+                GUID_TFCAT_TIPCAP_COMLESS, GUID_TFCAT_TIPCAP_IMMERSIVESUPPORT,
+                GUID_TFCAT_TIPCAP_INPUTMODECOMPARTMENT, GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
+                GUID_TFCAT_TIPCAP_UIELEMENTENABLED, GUID_TFCAT_TIP_KEYBOARD,
+            },
+        },
+    },
 };
 
 pub struct ProfileMgr;
 
 impl ProfileMgr {
-    pub fn register(
-        dll_path: &str
-    ) -> Result<()> {
+    pub fn register(dll_path: &str) -> Result<()> {
         unsafe {
             alert(dll_path);
 
-            let profiles: ITfInputProcessorProfileMgr = co_create_inproc::<ITfInputProcessorProfileMgr>(
-                &CLSID_TF_InputProcessorProfiles
-            )?;
+            let profiles: ITfInputProcessorProfileMgr =
+                co_create_inproc::<ITfInputProcessorProfileMgr>(&CLSID_TF_InputProcessorProfiles)?;
 
             let langid: u16 = LocaleNameToLCID(w!("ja-JP"), 0).try_into().unwrap();
 
@@ -46,27 +50,19 @@ impl ProfileMgr {
 
     pub fn unregister() -> Result<()> {
         unsafe {
-            let profiles: ITfInputProcessorProfileMgr = co_create_inproc::<ITfInputProcessorProfileMgr>(
-                &CLSID_TF_InputProcessorProfiles
-            )?;
+            let profiles: ITfInputProcessorProfileMgr =
+                co_create_inproc::<ITfInputProcessorProfileMgr>(&CLSID_TF_InputProcessorProfiles)?;
 
             let langid: u16 = LocaleNameToLCID(w!("ja-JP"), 0).try_into().unwrap();
 
-            return profiles.UnregisterProfile(
-                &GUID_TEXT_SERVICE,
-                langid,
-                &GUID_PROFILE,
-                0,
-            );
+            return profiles.UnregisterProfile(&GUID_TEXT_SERVICE, langid, &GUID_PROFILE, 0);
         }
     }
 }
 
 pub struct ClsidMgr;
 impl ClsidMgr {
-    pub fn register(
-        dll_path: &str
-    ) -> Result<()> {
+    pub fn register(dll_path: &str) -> Result<()> {
         let clsid_key = CLSID_PREFIX.to_owned() + &GUID_TEXT_SERVICE.to_string();
         let inproc_key = clsid_key.clone() + INPROC_SUFFIX;
 
@@ -105,12 +101,9 @@ impl CategiryMgr {
         GUID_TFCAT_TIPCAP_SYSTRAYSUPPORT,
     ];
 
-
     pub fn register() -> Result<()> {
         unsafe {
-            let catmgr: ITfCategoryMgr = co_create_inproc::<ITfCategoryMgr>(
-                &CLSID_TF_CategoryMgr
-            )?;
+            let catmgr: ITfCategoryMgr = co_create_inproc::<ITfCategoryMgr>(&CLSID_TF_CategoryMgr)?;
 
             for cat in Self::CATEGORIES.iter() {
                 catmgr.RegisterCategory(&GUID_TEXT_SERVICE, cat, &GUID_TEXT_SERVICE)?;
@@ -122,9 +115,7 @@ impl CategiryMgr {
 
     pub fn unregister() -> Result<()> {
         unsafe {
-            let catmgr: ITfCategoryMgr = co_create_inproc::<ITfCategoryMgr>(
-                &CLSID_TF_CategoryMgr
-            )?;
+            let catmgr: ITfCategoryMgr = co_create_inproc::<ITfCategoryMgr>(&CLSID_TF_CategoryMgr)?;
 
             for cat in Self::CATEGORIES.iter() {
                 catmgr.UnregisterCategory(&GUID_TEXT_SERVICE, cat, &GUID_TEXT_SERVICE)?;

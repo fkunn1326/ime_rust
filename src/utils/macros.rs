@@ -1,11 +1,10 @@
-
 #[macro_export]
 macro_rules! check_win32 {
     ($result:ident) => {
         if $result.is_ok() {
-            return Ok(())
+            return Ok(());
         } else {
-            return Err(windows::core::Error::from($result.to_hresult()))
+            return Err(windows::core::Error::from($result.to_hresult()));
         }
     };
     ($result:ident, $value:ident) => {
@@ -21,7 +20,7 @@ macro_rules! check_win32 {
 macro_rules! check_err {
     ($result:ident) => {
         if $result.is_err() {
-            return $result.into()
+            return $result.into();
         }
     };
 }
