@@ -1,2 +1,3 @@
+pub(crate) mod text_edit_sink;
 pub(crate) mod text_service;
-pub(crate) mod thread_mgr_event_sinc;
+pub(crate) mod thread_mgr_event_sink;

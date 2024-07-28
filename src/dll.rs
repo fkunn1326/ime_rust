@@ -39,16 +39,6 @@ impl DllModule {
         }
     }
 
-    pub fn add_ref(&mut self) -> u32 {
-        self.ref_count += 1;
-        self.ref_count
-    }
-
-    pub fn release(&mut self) -> u32 {
-        self.ref_count -= 1;
-        self.ref_count
-    }
-
     pub fn lock(&mut self) -> u32 {
         self.ref_lock += 1;
         self.ref_lock
@@ -111,7 +101,7 @@ pub extern "system" fn DllGetClassObject(
         return E_UNEXPECTED;
     }
 
-    let factory: IMEClassFactory = IMEClassFactory::new().into();
+    let factory: IMEClassFactory = IMEClassFactory::new();
     let factory: IClassFactory = factory.into();
 
     *ppv = unsafe { std::mem::transmute(factory) };

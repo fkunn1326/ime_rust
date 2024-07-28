@@ -1,5 +1,5 @@
 use windows::{
-    core::{implement, Error},
+    core::{implement, AsImpl, Error},
     Win32::{
         Foundation::{BOOL, E_NOINTERFACE},
         System::Com::{IClassFactory, IClassFactory_Impl},
@@ -26,7 +26,7 @@ impl IClassFactory_Impl for IMEClassFactory_Impl {
         riid: *const GUID,
         ppvobject: *mut *mut std::ffi::c_void,
     ) -> Result<()> {
-        let riid = unsafe { &*riid };
+        let riid = &unsafe { *riid };
         let ppvobject = unsafe { &mut *ppvobject };
 
         *ppvobject = std::ptr::null_mut();
@@ -35,11 +35,14 @@ impl IClassFactory_Impl for IMEClassFactory_Impl {
             return Err(Error::from(E_NOINTERFACE));
         }
 
-        if *riid != ITfTextInputProcessor::IID || *riid != IUnknown::IID {
+        if *riid != ITfTextInputProcessor::IID && *riid != IUnknown::IID {
             return Err(Error::from(E_NOINTERFACE));
         }
 
         let text_service: ITfTextInputProcessor = TextService::new().into();
+
+        let it: &TextService = unsafe { text_service.as_impl() };
+        it.set_this(text_service.clone());
 
         *ppvobject = unsafe { core::mem::transmute(text_service) };
 
