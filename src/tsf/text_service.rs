@@ -1,24 +1,83 @@
-use windows::core::Result;
+use std::cell::RefCell;
+
+use windows::core::{IUnknown, Interface, Result};
 use windows::Win32::UI::TextServices::{
-    ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfThreadMgrEventSink,
 };
 use windows_core::implement;
 
+use super::thread_mgr_event_sinc::ThreadMgrEventSink;
+
+// すべてを取りまとめるメインのクラス
+// Activate()とDeactivate()を実装しておけばいい
 #[implement(ITfTextInputProcessor)]
-pub struct TextService;
+pub struct TextService {
+    thread_mgr: RefCell<Option<ITfThreadMgr>>,
+    thread_mgr_event_sink: RefCell<Option<ITfThreadMgrEventSink>>,
+    cookie: RefCell<u32>,
+}
 
 impl TextService {
     pub fn new() -> Self {
-        Self
+        TextService {
+            thread_mgr: RefCell::new(None),
+            thread_mgr_event_sink: RefCell::new(None),
+            cookie: RefCell::new(0),
+        }
+    }
+
+    // activate()
+    fn activate(&self, _ptim: Option<&ITfThreadMgr>, _tid: u32) -> Result<()> {
+        self.init_thread_mgr_event_sink()?;
+        Ok(())
+    }
+
+    // deactivate()
+    fn deactivate(&self) -> Result<()> {
+        self.uninit_thread_mgr_event_sink()?;
+        Ok(())
+    }
+
+    // ThreadMgrEventSink
+    fn init_thread_mgr_event_sink(&self) -> Result<()> {
+        self.thread_mgr_event_sink
+            .borrow_mut()
+            .replace(ThreadMgrEventSink::new().into());
+
+        let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
+        let sink: IUnknown = self
+            .thread_mgr_event_sink
+            .borrow()
+            .clone()
+            .unwrap()
+            .cast()?;
+
+        let cookie = unsafe { source.AdviseSink(&ITfThreadMgrEventSink::IID, &sink) }?;
+
+        *self.cookie.borrow_mut() = cookie;
+
+        Ok(())
+    }
+
+    fn uninit_thread_mgr_event_sink(&self) -> Result<()> {
+        let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
+        let cookie = *self.cookie.borrow();
+        unsafe {
+            source.UnadviseSink(cookie)?;
+        }
+        Ok(())
     }
 }
 
 impl ITfTextInputProcessor_Impl for TextService_Impl {
-    fn Activate(&self, _ptim: Option<&ITfThreadMgr>, _tid: u32) -> Result<()> {
+    fn Activate(&self, ptim: Option<&ITfThreadMgr>, tid: u32) -> Result<()> {
+        let _ = self.activate(ptim, tid);
         Ok(())
     }
 
     fn Deactivate(&self) -> Result<()> {
+        let _ = self.deactivate();
         Ok(())
     }
 }
