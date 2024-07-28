@@ -1,7 +1,7 @@
 use crate::utils::{
     globals::{CLSID_PREFIX, GUID_PROFILE, GUID_TEXT_SERVICE, INPROC_SUFFIX, SERVICE_NAME},
     registry::RegKey,
-    winutils::{alert, co_create_inproc, to_wide_16, GUIDExt},
+    winutils::{co_create_inproc, to_wide_16, GUIDExt},
 };
 use windows::{
     core::{w, Result, GUID},
@@ -26,8 +26,6 @@ pub struct ProfileMgr;
 impl ProfileMgr {
     pub fn register(dll_path: &str) -> Result<()> {
         unsafe {
-            alert(dll_path);
-
             let profiles: ITfInputProcessorProfileMgr =
                 co_create_inproc::<ITfInputProcessorProfileMgr>(&CLSID_TF_InputProcessorProfiles)?;
 

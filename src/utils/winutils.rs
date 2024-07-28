@@ -4,14 +4,13 @@ use windows::{
         Foundation::{HMODULE, MAX_PATH},
         System::{
             Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
-            LibraryLoader::{
-                GetModuleFileNameW, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-                GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            },
+            LibraryLoader::GetModuleFileNameW,
         },
         UI::WindowsAndMessaging::{MessageBoxW, MB_OK},
     },
 };
+
+use crate::dll::DllModule;
 
 pub trait GUIDExt {
     fn to_string(&self) -> String;
@@ -58,12 +57,8 @@ pub fn to_wide_16(s: &str) -> Vec<u16> {
 pub fn get_module_path() -> String {
     unsafe {
         // Get a handle to the current module
-        let mut h_module: HMODULE = HMODULE::default();
-        let _ = GetModuleHandleExW(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            PCWSTR(get_module_path as *const _),
-            &mut h_module,
-        );
+        let dll_instance = DllModule::global().lock().unwrap();
+        let h_module: HMODULE = dll_instance.hinst;
 
         // Get the module file name
         let mut buffer: [u16; MAX_PATH as usize] = [0; MAX_PATH as usize];

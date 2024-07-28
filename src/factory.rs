@@ -8,7 +8,7 @@ use windows::{
 };
 use windows_core::{IUnknown, Interface, Result, GUID};
 
-use crate::tsf::text_service::TextService;
+use crate::{dll::DllModule, tsf::text_service::TextService};
 
 #[implement(IClassFactory)]
 pub struct IMEClassFactory;
@@ -47,10 +47,11 @@ impl IClassFactory_Impl for IMEClassFactory_Impl {
     }
 
     fn LockServer(&self, flock: BOOL) -> Result<()> {
+        let mut dll_instance = DllModule::global().lock().unwrap();
         if flock.as_bool() {
-            // Lock
+            dll_instance.lock();
         } else {
-            // Unlock
+            dll_instance.unlock();
         }
         Ok(())
     }
