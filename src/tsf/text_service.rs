@@ -1,12 +1,14 @@
 use std::cell::RefCell;
 
-use windows::core::{IUnknown, Interface, Result};
+use windows::core::{Interface, Result};
+use windows::Win32::Foundation::BOOL;
 use windows::Win32::UI::TextServices::{
-    ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl,
-    ITfThreadMgr, ITfThreadMgrEventSink,
+    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor,
+    ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink,
 };
 use windows_core::{implement, AsImpl};
 
+use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
 use super::thread_mgr_event_sink::ThreadMgrEventSink;
 
@@ -15,6 +17,7 @@ use super::thread_mgr_event_sink::ThreadMgrEventSink;
 #[implement(ITfTextInputProcessor)]
 pub struct TextService {
     this: RefCell<Option<ITfTextInputProcessor>>,
+    client_id: RefCell<u32>,
     // thread manager
     thread_mgr: RefCell<Option<ITfThreadMgr>>,
     thread_mgr_event_sink: RefCell<Option<ITfThreadMgrEventSink>>,
@@ -22,16 +25,27 @@ pub struct TextService {
 
     // language bar
     language_bar: RefCell<Option<ITfLangBarItemButton>>,
+
+    // key event sink
+    key_event_sink: RefCell<Option<ITfKeyEventSink>>,
 }
 
 impl TextService {
     pub fn new() -> Self {
         TextService {
             this: RefCell::new(None),
+            client_id: RefCell::new(0),
+
+            // thread manager
             thread_mgr: RefCell::new(None),
             thread_mgr_event_sink: RefCell::new(None),
             thread_mgr_event_sink_cookie: RefCell::new(0),
+
+            // language bar
             language_bar: RefCell::new(None),
+
+            // key event sink
+            key_event_sink: RefCell::new(None),
         }
     }
 
@@ -40,15 +54,19 @@ impl TextService {
     }
 
     // activate()
-    fn activate(&self, ptim: Option<&ITfThreadMgr>, _tid: u32) -> Result<()> {
+    fn activate(&self, ptim: Option<&ITfThreadMgr>, tid: u32) -> Result<()> {
         match ptim {
             Some(ptim) => {
                 self.thread_mgr.replace(Some(ptim.clone()));
             }
             None => {}
         }
+
+        self.client_id.replace(tid);
+
         self.activate_thread_mgr_event_sink()?;
         self.activate_language_bar()?;
+        self.activate_key_event_sink()?;
         Ok(())
     }
 
@@ -56,26 +74,21 @@ impl TextService {
     fn deactivate(&self) -> Result<()> {
         self.deactivate_thread_mgr_event_sink()?;
         self.deactivate_language_bar()?;
+        self.deactivate_key_event_sink()?;
         Ok(())
     }
 
     // ThreadMgrEventSink
     fn activate_thread_mgr_event_sink(&self) -> Result<()> {
-        self.thread_mgr_event_sink
-            .borrow_mut()
-            .replace(ThreadMgrEventSink::new().into());
-
+        let sink: ITfThreadMgrEventSink = ThreadMgrEventSink::new().into();
         let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
-        let sink: IUnknown = self
-            .thread_mgr_event_sink
-            .borrow()
-            .clone()
-            .unwrap()
-            .cast()?;
 
         let cookie = unsafe { source.AdviseSink(&ITfThreadMgrEventSink::IID, &sink) }?;
 
         self.thread_mgr_event_sink_cookie.replace(cookie);
+        self.thread_mgr_event_sink
+            .borrow_mut()
+            .replace(ThreadMgrEventSink::new().into());
 
         Ok(())
     }
@@ -89,6 +102,7 @@ impl TextService {
         Ok(())
     }
 
+    // language bar ("あ"とか"A"とかのやつ)
     fn activate_language_bar(&self) -> Result<()> {
         let language_bar = LanguageBar::new(self.thread_mgr.borrow().clone().unwrap()).unwrap();
         self.language_bar.replace(Some(language_bar));
@@ -102,6 +116,29 @@ impl TextService {
         language_bar.deactivate(item.clone())?;
 
         self.language_bar.replace(None);
+
+        Ok(())
+    }
+
+    // Key event sink (キーボードイベント関連)
+    fn activate_key_event_sink(&self) -> Result<()> {
+        let sink: ITfKeyEventSink = KeyEventSink::new().into();
+        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
+
+        unsafe {
+            source.AdviseKeyEventSink(self.client_id.borrow().clone(), &sink, BOOL::from(true))?;
+        }
+
+        self.key_event_sink.borrow_mut().replace(sink.into());
+
+        Ok(())
+    }
+
+    fn deactivate_key_event_sink(&self) -> Result<()> {
+        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
+        unsafe {
+            source.UnadviseKeyEventSink(self.client_id.borrow().clone())?;
+        }
 
         Ok(())
     }
