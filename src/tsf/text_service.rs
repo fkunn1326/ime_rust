@@ -2,11 +2,12 @@ use std::cell::RefCell;
 
 use windows::core::{IUnknown, Interface, Result};
 use windows::Win32::UI::TextServices::{
-    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
-    ITfThreadMgrEventSink,
+    ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl,
+    ITfThreadMgr, ITfThreadMgrEventSink,
 };
-use windows_core::implement;
+use windows_core::{implement, AsImpl};
 
+use super::language_bar::LanguageBar;
 use super::thread_mgr_event_sink::ThreadMgrEventSink;
 
 // すべてを取りまとめるメインのクラス
@@ -14,9 +15,13 @@ use super::thread_mgr_event_sink::ThreadMgrEventSink;
 #[implement(ITfTextInputProcessor)]
 pub struct TextService {
     this: RefCell<Option<ITfTextInputProcessor>>,
+    // thread manager
     thread_mgr: RefCell<Option<ITfThreadMgr>>,
     thread_mgr_event_sink: RefCell<Option<ITfThreadMgrEventSink>>,
     thread_mgr_event_sink_cookie: RefCell<u32>,
+
+    // language bar
+    language_bar: RefCell<Option<ITfLangBarItemButton>>,
 }
 
 impl TextService {
@@ -26,7 +31,12 @@ impl TextService {
             thread_mgr: RefCell::new(None),
             thread_mgr_event_sink: RefCell::new(None),
             thread_mgr_event_sink_cookie: RefCell::new(0),
+            language_bar: RefCell::new(None),
         }
+    }
+
+    pub fn set_this(&self, this: ITfTextInputProcessor) {
+        self.this.replace(Some(this));
     }
 
     // activate()
@@ -37,22 +47,20 @@ impl TextService {
             }
             None => {}
         }
-        self.init_thread_mgr_event_sink()?;
+        self.activate_thread_mgr_event_sink()?;
+        self.activate_language_bar()?;
         Ok(())
     }
 
     // deactivate()
     fn deactivate(&self) -> Result<()> {
-        self.uninit_thread_mgr_event_sink()?;
+        self.deactivate_thread_mgr_event_sink()?;
+        self.deactivate_language_bar()?;
         Ok(())
     }
 
-    pub fn set_this(&self, this: ITfTextInputProcessor) {
-        self.this.replace(Some(this));
-    }
-
     // ThreadMgrEventSink
-    fn init_thread_mgr_event_sink(&self) -> Result<()> {
+    fn activate_thread_mgr_event_sink(&self) -> Result<()> {
         self.thread_mgr_event_sink
             .borrow_mut()
             .replace(ThreadMgrEventSink::new().into());
@@ -67,17 +75,34 @@ impl TextService {
 
         let cookie = unsafe { source.AdviseSink(&ITfThreadMgrEventSink::IID, &sink) }?;
 
-        *self.thread_mgr_event_sink_cookie.borrow_mut() = cookie;
+        self.thread_mgr_event_sink_cookie.replace(cookie);
 
         Ok(())
     }
 
-    fn uninit_thread_mgr_event_sink(&self) -> Result<()> {
+    fn deactivate_thread_mgr_event_sink(&self) -> Result<()> {
         let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
         let cookie = *self.thread_mgr_event_sink_cookie.borrow();
         unsafe {
             source.UnadviseSink(cookie)?;
         }
+        Ok(())
+    }
+
+    fn activate_language_bar(&self) -> Result<()> {
+        let language_bar = LanguageBar::new(self.thread_mgr.borrow().clone().unwrap()).unwrap();
+        self.language_bar.replace(Some(language_bar));
+
+        Ok(())
+    }
+
+    fn deactivate_language_bar(&self) -> Result<()> {
+        let item = self.language_bar.borrow().clone().unwrap();
+        let language_bar = unsafe { item.as_impl() };
+        language_bar.deactivate(item.clone())?;
+
+        self.language_bar.replace(None);
+
         Ok(())
     }
 }
