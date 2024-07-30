@@ -3,8 +3,7 @@ use std::cell::RefCell;
 use windows::core::{Interface, Result};
 use windows::Win32::Foundation::BOOL;
 use windows::Win32::UI::TextServices::{
-    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor,
-    ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink,
+    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink
 };
 use windows_core::{implement, AsImpl};
 
@@ -122,7 +121,9 @@ impl TextService {
 
     // Key event sink (キーボードイベント関連)
     fn activate_key_event_sink(&self) -> Result<()> {
-        let sink: ITfKeyEventSink = KeyEventSink::new().into();
+        let sink: ITfKeyEventSink = KeyEventSink::new(
+            self.client_id.borrow().clone(),
+        ).into();
         let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
 
         unsafe {
