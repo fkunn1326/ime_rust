@@ -4,6 +4,8 @@ use windows::Win32::{
 };
 use windows_core::{implement, Result};
 
+use crate::utils::winutils::alert;
+
 use super::edit_session::EditSession;
 
 #[implement(ITfKeyEventSink)]
@@ -25,10 +27,10 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
     fn OnKeyDown(
         &self,
         pic: Option<&ITfContext>,
-        _wparam: WPARAM,
+        wparam: WPARAM,
         _lparam: LPARAM,
     ) -> Result<BOOL> {
-        EditSession::handle(self.client_id, pic.unwrap().clone())?;
+        EditSession::handle(self.client_id, pic.unwrap().clone(), wparam.0.try_into().unwrap())?;
         Ok(BOOL::from(true))
     }
 
