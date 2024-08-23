@@ -1,3 +1,4 @@
+pub(crate) mod display_attribute;
 pub(crate) mod edit_session;
 pub(crate) mod key_event_sink;
 pub(crate) mod language_bar;

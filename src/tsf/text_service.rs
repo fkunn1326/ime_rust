@@ -1,11 +1,19 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use windows::core::{Interface, Result};
 use windows::Win32::Foundation::BOOL;
 use windows::Win32::UI::TextServices::{
-    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink
+    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton,
+    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfThreadMgrEventSink,
 };
 use windows_core::{implement, AsImpl};
+
+use crate::utils::globals::{
+    GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,
+};
+use crate::utils::winutils::co_create_inproc;
 
 use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
@@ -22,11 +30,17 @@ pub struct TextService {
     thread_mgr_event_sink: RefCell<Option<ITfThreadMgrEventSink>>,
     thread_mgr_event_sink_cookie: RefCell<u32>,
 
+    // category manager
+    category_mgr: RefCell<Option<ITfCategoryMgr>>,
+
     // language bar
     language_bar: RefCell<Option<ITfLangBarItemButton>>,
 
     // key event sink
     key_event_sink: RefCell<Option<ITfKeyEventSink>>,
+
+    // display attribute
+    display_attribute_atom: RefCell<HashMap<&'static str, u32>>,
 }
 
 impl TextService {
@@ -35,16 +49,17 @@ impl TextService {
             this: RefCell::new(None),
             client_id: RefCell::new(0),
 
-            // thread manager
             thread_mgr: RefCell::new(None),
             thread_mgr_event_sink: RefCell::new(None),
             thread_mgr_event_sink_cookie: RefCell::new(0),
 
-            // language bar
+            category_mgr: RefCell::new(None),
+
             language_bar: RefCell::new(None),
 
-            // key event sink
             key_event_sink: RefCell::new(None),
+
+            display_attribute_atom: RefCell::new(HashMap::new()),
         }
     }
 
@@ -61,11 +76,16 @@ impl TextService {
             None => {}
         }
 
+        self.category_mgr
+            .replace(Some(co_create_inproc::<ITfCategoryMgr>(
+                &CLSID_TF_CategoryMgr,
+            )?));
         self.client_id.replace(tid);
 
         self.activate_thread_mgr_event_sink()?;
         self.activate_language_bar()?;
         self.activate_key_event_sink()?;
+        self.activate_display_attribute()?;
         Ok(())
     }
 
@@ -74,6 +94,7 @@ impl TextService {
         self.deactivate_thread_mgr_event_sink()?;
         self.deactivate_language_bar()?;
         self.deactivate_key_event_sink()?;
+        self.deactivate_display_attribute()?;
         Ok(())
     }
 
@@ -121,9 +142,7 @@ impl TextService {
 
     // Key event sink (キーボードイベント関連)
     fn activate_key_event_sink(&self) -> Result<()> {
-        let sink: ITfKeyEventSink = KeyEventSink::new(
-            self.client_id.borrow().clone(),
-        ).into();
+        let sink: ITfKeyEventSink = KeyEventSink::new(self.client_id.borrow().clone()).into();
         let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
 
         unsafe {
@@ -141,6 +160,33 @@ impl TextService {
             source.UnadviseKeyEventSink(self.client_id.borrow().clone())?;
         }
 
+        Ok(())
+    }
+
+    // Display attribute (表示属性、下線入れたり色変えたり)
+    fn activate_display_attribute(&self) -> Result<()> {
+        let category_mgr = self.category_mgr.borrow().clone().unwrap();
+        let mut atom_map = HashMap::new();
+
+        unsafe {
+            let input_atom = category_mgr.RegisterGUID(&GUID_DISPLAY_ATTRIBUTE_INPUT)?;
+            let focused_atom = category_mgr.RegisterGUID(&GUID_DISPLAY_ATTRIBUTE_FOCUSED)?;
+            let converted_atom = category_mgr.RegisterGUID(&GUID_DISPLAY_ATTRIBUTE_CONVERTED)?;
+
+            atom_map.insert("input", input_atom);
+            atom_map.insert("focused", focused_atom);
+            atom_map.insert("converted", converted_atom);
+        }
+
+        // alert(&format!("input: {:?}", atom_map));
+
+        self.display_attribute_atom.replace(atom_map);
+
+        Ok(())
+    }
+
+    fn deactivate_display_attribute(&self) -> Result<()> {
+        self.display_attribute_atom.borrow_mut().clear();
         Ok(())
     }
 }
