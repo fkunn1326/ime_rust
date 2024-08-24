@@ -8,6 +8,10 @@
       <HostFolder>D:\ime_rust\wsb</HostFolder>
       <ReadOnly>true</ReadOnly>
     </MappedFolder>
+    <MappedFolder>
+      <HostFolder>D:\azookey-service\.build\x86_64-unknown-windows-msvc\release</HostFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
   </MappedFolders>
   <LogonCommand>
     <Command>C:\Users\WDAGUtilityAccount\Desktop\wsb\setup.bat</Command>
