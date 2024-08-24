@@ -45,7 +45,7 @@ pub fn to_wide(s: &str) -> Vec<u8> {
         .flat_map(|c| c.to_le_bytes())
         .collect::<Vec<u8>>();
     wide.push(0);
-    wide
+    return wide;
 }
 
 pub fn to_wide_16(s: &str) -> Vec<u16> {

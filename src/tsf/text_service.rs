@@ -1,27 +1,28 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use windows::core::{Interface, Result};
+use windows::core::{Interface, Result, implement, AsImpl};
 use windows::Win32::Foundation::BOOL;
 use windows::Win32::UI::TextServices::{
-    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton,
-    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
-    ITfThreadMgrEventSink,
+    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfCompositionSink, ITfCompositionSink_Impl, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink
 };
-use windows_core::{implement, AsImpl};
 
 use crate::utils::globals::{
     GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,
 };
 use crate::utils::winutils::co_create_inproc;
 
+use super::composition_mgr::CompositionMgr;
 use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
 use super::thread_mgr_event_sink::ThreadMgrEventSink;
 
 // すべてを取りまとめるメインのクラス
 // Activate()とDeactivate()を実装しておけばいい
-#[implement(ITfTextInputProcessor)]
+#[implement(
+    ITfTextInputProcessor,
+    ITfCompositionSink
+)]
 pub struct TextService {
     this: RefCell<Option<ITfTextInputProcessor>>,
     client_id: RefCell<u32>,
@@ -41,6 +42,9 @@ pub struct TextService {
 
     // display attribute
     display_attribute_atom: RefCell<HashMap<&'static str, u32>>,
+
+    // composition manager
+    composition_mgr: RefCell<Option<CompositionMgr>>,
 }
 
 impl TextService {
@@ -60,6 +64,8 @@ impl TextService {
             key_event_sink: RefCell::new(None),
 
             display_attribute_atom: RefCell::new(HashMap::new()),
+
+            composition_mgr: RefCell::new(None),
         }
     }
 
@@ -84,8 +90,9 @@ impl TextService {
 
         self.activate_thread_mgr_event_sink()?;
         self.activate_language_bar()?;
-        self.activate_key_event_sink()?;
         self.activate_display_attribute()?;
+        self.activate_composition_mgr()?;
+        self.activate_key_event_sink()?;
         Ok(())
     }
 
@@ -93,8 +100,9 @@ impl TextService {
     fn deactivate(&self) -> Result<()> {
         self.deactivate_thread_mgr_event_sink()?;
         self.deactivate_language_bar()?;
-        self.deactivate_key_event_sink()?;
         self.deactivate_display_attribute()?;
+        self.deactivate_composition_mgr()?;
+        self.deactivate_key_event_sink()?;
         Ok(())
     }
 
@@ -140,29 +148,6 @@ impl TextService {
         Ok(())
     }
 
-    // Key event sink (キーボードイベント関連)
-    fn activate_key_event_sink(&self) -> Result<()> {
-        let sink: ITfKeyEventSink = KeyEventSink::new(self.client_id.borrow().clone()).into();
-        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
-
-        unsafe {
-            source.AdviseKeyEventSink(self.client_id.borrow().clone(), &sink, BOOL::from(true))?;
-        }
-
-        self.key_event_sink.borrow_mut().replace(sink.into());
-
-        Ok(())
-    }
-
-    fn deactivate_key_event_sink(&self) -> Result<()> {
-        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
-        unsafe {
-            source.UnadviseKeyEventSink(self.client_id.borrow().clone())?;
-        }
-
-        Ok(())
-    }
-
     // Display attribute (表示属性、下線入れたり色変えたり)
     fn activate_display_attribute(&self) -> Result<()> {
         let category_mgr = self.category_mgr.borrow().clone().unwrap();
@@ -189,6 +174,49 @@ impl TextService {
         self.display_attribute_atom.borrow_mut().clear();
         Ok(())
     }
+
+    fn activate_composition_mgr(&self) -> Result<()> {
+        let client_id = self.client_id.borrow().clone();
+
+        let this: ITfTextInputProcessor = self.this.borrow().clone().unwrap();
+        let sink: ITfCompositionSink = this.cast()?;
+
+        let composition_mgr = CompositionMgr::new(client_id, sink);
+        self.composition_mgr.replace(Some(composition_mgr));
+
+        Ok(())
+    }
+
+    fn deactivate_composition_mgr(&self) -> Result<()> {
+        self.composition_mgr.borrow_mut().take();
+        Ok(())
+    }
+
+    // Key event sink (キーボードイベント関連)
+    fn activate_key_event_sink(&self) -> Result<()> {
+        let sink: ITfKeyEventSink = KeyEventSink::new(
+            self.composition_mgr.borrow().clone().unwrap(),
+        ).into();
+
+        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
+
+        unsafe {
+            source.AdviseKeyEventSink(self.client_id.borrow().clone(), &sink, BOOL::from(true))?;
+        }
+
+        self.key_event_sink.borrow_mut().replace(sink.into());
+
+        Ok(())
+    }
+
+    fn deactivate_key_event_sink(&self) -> Result<()> {
+        let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
+        unsafe {
+            source.UnadviseKeyEventSink(self.client_id.borrow().clone())?;
+        }
+
+        Ok(())
+    }
 }
 
 impl ITfTextInputProcessor_Impl for TextService_Impl {
@@ -199,6 +227,12 @@ impl ITfTextInputProcessor_Impl for TextService_Impl {
 
     fn Deactivate(&self) -> Result<()> {
         self.deactivate()?;
+        Ok(())
+    }
+}
+
+impl ITfCompositionSink_Impl for TextService_Impl {
+    fn OnCompositionTerminated(&self,_ecwrite:u32,_pcomposition:Option<&windows::Win32::UI::TextServices::ITfComposition>) -> windows_core::Result<()> {
         Ok(())
     }
 }

@@ -1,8 +1,7 @@
-use windows::core::Result;
+use windows::core::{Result, implement};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfDocumentMgr, ITfThreadMgrEventSink, ITfThreadMgrEventSink_Impl,
 };
-use windows_core::implement;
 
 // イベントを受け取るクラス、編集コンテキストを作成したり、破棄したりするときに呼ばれる
 #[implement(ITfThreadMgrEventSink)]

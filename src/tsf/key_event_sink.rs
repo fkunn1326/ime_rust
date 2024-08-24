@@ -1,26 +1,24 @@
-use std::rc::Rc;
-
 use windows::Win32::{
     Foundation::{BOOL, LPARAM, WPARAM},
     UI::TextServices::{
-        ITfContext, ITfInsertAtSelection, ITfKeyEventSink, ITfKeyEventSink_Impl, TF_ANCHOR_END,
-        TF_IAS_QUERYONLY, TF_ST_CORRECTION,
+        ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl
     },
 };
-use windows_core::{implement, Interface, Result};
+use windows::core::{implement, Result};
 
-use crate::utils::winutils::to_wide_16;
+use super::composition_mgr::CompositionMgr;
 
-use super::edit_session::EditSession;
-
+// キーボードイベントを処理するクラス
 #[implement(ITfKeyEventSink)]
 pub struct KeyEventSink {
-    client_id: u32,
+    composition_mgr: CompositionMgr,
 }
 
 impl KeyEventSink {
-    pub fn new(client_id: u32) -> Self {
-        KeyEventSink { client_id }
+    pub fn new(composition_mgr: CompositionMgr) -> Self {
+        KeyEventSink {
+            composition_mgr,
+        }
     }
 }
 
@@ -31,18 +29,16 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
         _wparam: WPARAM,
         _lparam: LPARAM,
     ) -> Result<BOOL> {
-        let insert: ITfInsertAtSelection = pic.unwrap().clone().cast()?;
-
-        EditSession::handle(
-            self.client_id,
-            pic.unwrap().clone(),
-            Rc::new(move |cookie| unsafe {
-                let range = insert.InsertTextAtSelection(cookie, TF_IAS_QUERYONLY, &[])?;
-                range.SetText(cookie, TF_ST_CORRECTION, &to_wide_16("ABC"))?;
-                range.Collapse(cookie, TF_ANCHOR_END)?;
-                Ok(())
-            }),
-        )?;
+        if self.composition_mgr.composition.borrow().clone().is_none() {
+            self.composition_mgr.start_composition(pic.unwrap().clone())?;
+            self.composition_mgr.set_text("0", pic.unwrap().clone())?;
+        } else {
+            let preedit = self.composition_mgr.preedit.borrow().clone();
+            let preedit_int = preedit.parse::<i32>().unwrap();
+            self.composition_mgr.set_text(&(preedit_int+1).to_string(), pic.unwrap().clone())?;
+        }
+        
+        // self.composition_mgr.end_composition(pic.unwrap().clone())?;
         Ok(BOOL::from(true))
     }
 
@@ -53,7 +49,7 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
     fn OnPreservedKey(
         &self,
         _pic: Option<&ITfContext>,
-        _rguid: *const windows_core::GUID,
+        _rguid: *const windows::core::GUID,
     ) -> Result<BOOL> {
         Ok(BOOL::from(true))
     }

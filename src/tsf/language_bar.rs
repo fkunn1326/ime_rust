@@ -15,7 +15,7 @@ use windows::Win32::{
         WindowsAndMessaging::{LoadImageW, HICON, IMAGE_ICON, LR_DEFAULTCOLOR},
     },
 };
-use windows_core::{implement, IUnknown, Interface, Result, BSTR, GUID, PCWSTR};
+use windows::core::{implement, Interface, IUnknown, Result, BSTR, GUID, PCWSTR};
 
 use crate::utils::globals::GUID_TEXT_SERVICE;
 use crate::{dll::DllModule, utils::globals::TEXTSERVICE_LANGBARITEMSINK_COOKIE};
@@ -23,12 +23,13 @@ use crate::{dll::DllModule, utils::globals::TEXTSERVICE_LANGBARITEMSINK_COOKIE};
 // https://github.com/MicrosoftDocs/win32/blob/docs/desktop-src/TSF/language-bar.md
 // https://github.com/microsoft/Windows-classic-samples/blob/main/Samples/Win7Samples/winui/input/tsf/textservice/textservice-step04/LanguageBar.cpp
 
+// 言語バー（"あ"とか"A"とかのやつ）を扱うクラス
 #[implement(ITfSource, ITfLangBarItem, ITfLangBarItemButton)]
 pub struct LanguageBar {
     thread_mgr: ITfThreadMgr,
 }
 
-// これを代入しないと表示されない
+// これを用意しないと言語バーは表示されない
 static INFO: TF_LANGBARITEMINFO = TF_LANGBARITEMINFO {
     clsidService: GUID_TEXT_SERVICE,
     guidItem: GUID_LBI_INPUTMODE,
@@ -92,11 +93,11 @@ impl ITfLangBarItemButton_Impl for LanguageBar_Impl {
         Ok(())
     }
 
-    fn InitMenu(&self, _pmenu: Option<&ITfMenu>) -> windows_core::Result<()> {
+    fn InitMenu(&self, _pmenu: Option<&ITfMenu>) -> windows::core::Result<()> {
         Ok(())
     }
 
-    fn OnMenuSelect(&self, _w_id: u32) -> windows_core::Result<()> {
+    fn OnMenuSelect(&self, _w_id: u32) -> windows::core::Result<()> {
         Ok(())
     }
 

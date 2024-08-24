@@ -1,12 +1,11 @@
 use windows::{
-    core::{implement, AsImpl, Error},
+    core::{implement, AsImpl, Error, IUnknown, Interface, Result, GUID},
     Win32::{
         Foundation::{BOOL, E_NOINTERFACE},
         System::Com::{IClassFactory, IClassFactory_Impl},
         UI::TextServices::ITfTextInputProcessor,
     },
 };
-use windows_core::{IUnknown, Interface, Result, GUID};
 
 use crate::{dll::DllModule, tsf::text_service::TextService};
 

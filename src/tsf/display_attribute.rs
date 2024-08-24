@@ -10,7 +10,7 @@ use windows::Win32::{
         TF_LS_SOLID, TF_LS_SQUIGGLE,
     },
 };
-use windows_core::{implement, Error, Result, BSTR, GUID};
+use windows::core::{implement, Error, Result, BSTR, GUID};
 
 use crate::utils::globals::{
     GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,
@@ -218,7 +218,7 @@ impl ITfDisplayAttributeProvider_Impl for DisplayAttributeProvider_Impl {
 
     fn GetDisplayAttributeInfo(
         &self,
-        guid: *const windows_core::GUID,
+        guid: *const windows::core::GUID,
     ) -> Result<ITfDisplayAttributeInfo> {
         let guid = unsafe { *guid };
         let attributes = EnumDisplayAttributeInfo::new();

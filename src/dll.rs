@@ -1,11 +1,9 @@
 use std::ffi::c_void;
 
-use windows::core::GUID;
 use windows::Win32::Foundation::{BOOL, CLASS_E_CLASSNOTAVAILABLE, E_UNEXPECTED, HMODULE, S_FALSE};
 use windows::Win32::System::Com::IClassFactory;
 use windows::Win32::System::SystemServices::DLL_PROCESS_ATTACH;
-use windows::{core::HRESULT, Win32::Foundation::S_OK};
-use windows_core::Interface;
+use windows::{core::{Interface, GUID, HRESULT}, Win32::Foundation::S_OK};
 
 use crate::check_err;
 use crate::factory::IMEClassFactory;
