@@ -12,6 +12,7 @@ use super::edit_session::EditSession;
 #[derive(Clone)]
 pub struct CompositionMgr {
     pub composition: Rc<RefCell<Option<ITfComposition>>>,
+    context: Rc<RefCell<Option<ITfContext>>>,
     sink: ITfCompositionSink,
     client_id: u32,
     pub preedit: RefCell<String>,
@@ -21,6 +22,7 @@ impl CompositionMgr {
     pub fn new(client_id: u32, sink: ITfCompositionSink) -> Self {
         CompositionMgr {
             composition: Rc::new(RefCell::new(None)),
+            context: Rc::new(RefCell::new(None)),
             sink,
             client_id,
             preedit: RefCell::new(String::new()),
@@ -30,6 +32,8 @@ impl CompositionMgr {
     pub fn start_composition(&self, context: ITfContext) -> Result<()> {
         let insert: ITfInsertAtSelection = context.cast()?;
         let context_composition: ITfContextComposition = context.cast()?;
+
+        self.context.replace(Some(context.clone()));
 
         EditSession::handle(
             self.client_id,
@@ -51,27 +55,28 @@ impl CompositionMgr {
         Ok(())
     }
 
-    pub fn end_composition(&self, context: ITfContext) -> Result<()> {
+    pub fn end_composition(&self) -> Result<()> {
         let composition = self.composition.borrow().clone().unwrap();
         EditSession::handle(
             self.client_id,
-            context,
+            self.context.borrow().clone().unwrap(),
             Rc::new(move |cookie| unsafe {
                 composition.EndComposition(cookie)?;
                 Ok(())
             }),
         )?;
+        self.composition.replace(None);
 
         Ok(())
     }
 
-    pub fn set_text(&self, text: &str, context: ITfContext) -> Result<()> {
+    pub fn set_text(&self, text: &str) -> Result<()> {
         self.preedit.replace(text.to_string());
         let composition = self.composition.borrow().clone().unwrap();
         let wide_text = to_wide_16(text);
         EditSession::handle(
             self.client_id,
-            context,
+            self.context.borrow().clone().unwrap(),
             Rc::new(move |cookie| unsafe {
                 let range = composition.GetRange()?;
                 range.SetText(cookie, 0, &wide_text)?;

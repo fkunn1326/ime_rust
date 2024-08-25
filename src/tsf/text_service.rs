@@ -1,8 +1,9 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use windows::core::{Interface, Result, implement, AsImpl};
-use windows::Win32::Foundation::BOOL;
+use windows::core::{Interface, Result, implement, AsImpl, w};
+use windows::Win32::Foundation::{CloseHandle, BOOL, GENERIC_READ, GENERIC_WRITE, HANDLE};
+use windows::Win32::Storage::FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING};
 use windows::Win32::UI::TextServices::{
     CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfCompositionSink, ITfCompositionSink_Impl, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink
 };
@@ -45,6 +46,9 @@ pub struct TextService {
 
     // composition manager
     composition_mgr: RefCell<Option<CompositionMgr>>,
+
+    // pipe handle
+    pipe_handle: RefCell<Option<HANDLE>>,
 }
 
 impl TextService {
@@ -66,6 +70,8 @@ impl TextService {
             display_attribute_atom: RefCell::new(HashMap::new()),
 
             composition_mgr: RefCell::new(None),
+
+            pipe_handle: RefCell::new(None),
         }
     }
 
@@ -91,6 +97,7 @@ impl TextService {
         self.activate_thread_mgr_event_sink()?;
         self.activate_language_bar()?;
         self.activate_display_attribute()?;
+        self.activate_pipe()?;
         self.activate_composition_mgr()?;
         self.activate_key_event_sink()?;
         Ok(())
@@ -103,6 +110,7 @@ impl TextService {
         self.deactivate_display_attribute()?;
         self.deactivate_composition_mgr()?;
         self.deactivate_key_event_sink()?;
+        self.deactivate_pipe()?;
         Ok(())
     }
 
@@ -188,7 +196,8 @@ impl TextService {
     }
 
     fn deactivate_composition_mgr(&self) -> Result<()> {
-        self.composition_mgr.borrow_mut().take();
+        let composition_mgr = self.composition_mgr.borrow_mut().take().unwrap();
+        composition_mgr.end_composition()?;
         Ok(())
     }
 
@@ -196,16 +205,17 @@ impl TextService {
     fn activate_key_event_sink(&self) -> Result<()> {
         let sink: ITfKeyEventSink = KeyEventSink::new(
             self.composition_mgr.borrow().clone().unwrap(),
+            self.pipe_handle.borrow().clone().unwrap(),
         ).into();
-
+    
         let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
-
+    
         unsafe {
             source.AdviseKeyEventSink(self.client_id.borrow().clone(), &sink, BOOL::from(true))?;
         }
-
+    
         self.key_event_sink.borrow_mut().replace(sink.into());
-
+    
         Ok(())
     }
 
@@ -215,6 +225,31 @@ impl TextService {
             source.UnadviseKeyEventSink(self.client_id.borrow().clone())?;
         }
 
+        Ok(())
+    }
+
+    fn activate_pipe(&self) -> Result<()> {
+        let handle = unsafe {
+            CreateFileW(
+                w!("\\\\.\\pipe\\azookey_service"),
+                GENERIC_WRITE.0 | GENERIC_READ.0,
+                FILE_SHARE_NONE,
+                None,
+                OPEN_EXISTING,
+                FILE_ATTRIBUTE_NORMAL,
+                None,
+            )
+        }?;
+
+        self.pipe_handle.replace(Some(handle));
+        Ok(())
+    }
+
+    fn deactivate_pipe(&self) -> Result<()> {
+        let handle = self.pipe_handle.borrow().clone().unwrap();
+        unsafe {
+            CloseHandle(handle)?;
+        }
         Ok(())
     }
 }

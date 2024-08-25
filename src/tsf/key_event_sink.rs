@@ -1,12 +1,10 @@
 use core::str;
-use std::{fs::File, io::{Read, Write}};
-// use std::fs::File;
+use std::borrow::BorrowMut;
 
 use windows::Win32::{
-    Foundation::{BOOL, LPARAM, WPARAM},
-    UI::TextServices::{
+    Foundation::{BOOL, HANDLE, LPARAM, WPARAM}, Storage::FileSystem::{ReadFile, WriteFile}, UI::TextServices::{
         ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl
-    },
+    }
 };
 use windows::core::{implement, Result};
 
@@ -16,19 +14,14 @@ use super::composition_mgr::CompositionMgr;
 #[implement(ITfKeyEventSink)]
 pub struct KeyEventSink {
     composition_mgr: CompositionMgr,
-    file: File,
+    handle: HANDLE,
 }
 
 impl KeyEventSink {
-    pub fn new(composition_mgr: CompositionMgr) -> Self {
-        let file = File::options()
-            .read(true)
-            .write(true)
-            .open("\\\\.\\pipe\\azookey_service")
-            .unwrap();
+    pub fn new(composition_mgr: CompositionMgr, handle: HANDLE) -> Self {
         KeyEventSink {
             composition_mgr,
-            file
+            handle,
         }
     }
 }
@@ -40,8 +33,6 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
         _wparam: WPARAM,
         _lparam: LPARAM,
     ) -> Result<BOOL> {
-        let mut file = self.file.try_clone().unwrap();
-
         // https://learn.microsoft.com/ja-jp/windows/win32/inputdev/virtual-key-codes
         fn code2char(code: u8) -> String {
             if code >= 0x41 && code <= 0x5A {
@@ -55,30 +46,41 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
         let code: u8 = _wparam.0.try_into().unwrap();
 
         let message = code2char(code);
-        file.write_all(message.as_bytes())?;
+        let message_len = message.len();
+        if message == "" {
+            return Ok(BOOL::from(true));
+        }
+
+        let wide: Vec<u8> = message.to_string().into_bytes();
+        unsafe {
+            WriteFile(
+                self.handle,
+                Some(&wide),
+                Some((message_len as u32).borrow_mut()),
+                None,
+            )
+        }?;
 
         // サーバーからの応答を読み取り
         let mut buffer = [0; 1024];
-        let mut response = String::new();
+        let buffer_len = buffer.len();
+        unsafe {
+            ReadFile(
+                self.handle,
+                Some(&mut buffer),
+                Some((buffer_len as u32).borrow_mut()),
+                None,
+            )
+        }?;
+
+        let response = String::from_utf8_lossy(&buffer[..]);
 
         if self.composition_mgr.composition.borrow().clone().is_none() {
             self.composition_mgr.start_composition(pic.unwrap().clone())?;
         }
 
-        match file.read(&mut buffer) {
-            Ok(0) => println!("Server closed the connection"),
-            Ok(n) => {
-                response.push_str(&String::from_utf8_lossy(&buffer[..n]));
-                self.composition_mgr.set_text(&response, pic.unwrap().clone())?;
-                println!("Received response: {}", response);
-            },
-            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {
-                println!("Read operation timed out");
-            },
-            Err(e) => return Err(e.into()),
-        }
-        
-        // self.composition_mgr.end_composition(pic.unwrap().clone())?;
+        self.composition_mgr.set_text(&response)?;
+
         Ok(BOOL::from(true))
     }
 
