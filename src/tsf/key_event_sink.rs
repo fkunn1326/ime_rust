@@ -1,12 +1,15 @@
-use core::str;
 use std::borrow::BorrowMut;
+use std::sync::mpsc;
 
-use windows::Win32::{
-    Foundation::{BOOL, HANDLE, LPARAM, WPARAM}, Storage::FileSystem::{ReadFile, WriteFile}, UI::TextServices::{
-        ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl
-    }
-};
 use windows::core::{implement, Result};
+use windows::Win32::{
+    Foundation::{BOOL, HANDLE, LPARAM, WPARAM},
+    Storage::FileSystem::{ReadFile, WriteFile},
+    UI::TextServices::{ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl},
+};
+
+use crate::ui::ui::{CandidateEvent, UiEvent};
+use crate::utils::winutils::debug;
 
 use super::composition_mgr::CompositionMgr;
 
@@ -15,15 +18,27 @@ use super::composition_mgr::CompositionMgr;
 pub struct KeyEventSink {
     composition_mgr: CompositionMgr,
     handle: HANDLE,
+    ui_proxy: mpsc::Sender<UiEvent>,
 }
 
 impl KeyEventSink {
-    pub fn new(composition_mgr: CompositionMgr, handle: HANDLE) -> Self {
+    pub fn new(
+        composition_mgr: CompositionMgr,
+        handle: HANDLE,
+        ui_proxy: mpsc::Sender<UiEvent>,
+    ) -> Self {
         KeyEventSink {
             composition_mgr,
             handle,
+            ui_proxy,
         }
     }
+}
+
+#[derive(serde::Serialize)]
+struct KeyEvent {
+    r#type: String,
+    message: String,
 }
 
 impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
@@ -34,22 +49,14 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
         _lparam: LPARAM,
     ) -> Result<BOOL> {
         // https://learn.microsoft.com/ja-jp/windows/win32/inputdev/virtual-key-codes
-        fn code2char(code: u8) -> String {
-            if code >= 0x41 && code <= 0x5A {
-                return str::from_utf8(&vec![code]).unwrap().to_string().to_lowercase();
-            } else if code == 0xbd {
-                return "ー".to_string()
-            } else {
-                return "".to_string();
-            }
-        }
         let code: u8 = _wparam.0.try_into().unwrap();
 
-        let message = code2char(code);
+        let message = serde_json::to_string(&KeyEvent {
+            r#type: "key".to_string(),
+            message: code.to_string(),
+        })
+        .unwrap();
         let message_len = message.len();
-        if message == "" {
-            return Ok(BOOL::from(true));
-        }
 
         let wide: Vec<u8> = message.to_string().into_bytes();
         unsafe {
@@ -74,12 +81,28 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
         }?;
 
         let response = String::from_utf8_lossy(&buffer[..]);
+        let response: Vec<&str> = response.split(',').collect();
 
         if self.composition_mgr.composition.borrow().clone().is_none() {
-            self.composition_mgr.start_composition(pic.unwrap().clone())?;
+            self.composition_mgr
+                .start_composition(pic.unwrap().clone())?;
         }
 
-        self.composition_mgr.set_text(&response)?;
+        let pos = self.composition_mgr.get_pos()?;
+
+        self.ui_proxy.send(
+            UiEvent::Locate(pos)
+        ).unwrap();
+
+        self.ui_proxy.send(
+            UiEvent::Candidate(
+                CandidateEvent {
+                    candidates: response.iter().map(|s| s.to_string()).collect(),
+                }
+            )
+        ).unwrap();
+
+        self.composition_mgr.set_text(&response[0])?;
 
         Ok(BOOL::from(true))
     }

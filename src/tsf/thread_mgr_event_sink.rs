@@ -1,4 +1,4 @@
-use windows::core::{Result, implement};
+use windows::core::{implement, Result};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfDocumentMgr, ITfThreadMgrEventSink, ITfThreadMgrEventSink_Impl,
 };

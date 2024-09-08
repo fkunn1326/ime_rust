@@ -3,11 +3,15 @@ use std::ffi::c_void;
 use windows::Win32::Foundation::{BOOL, CLASS_E_CLASSNOTAVAILABLE, E_UNEXPECTED, HMODULE, S_FALSE};
 use windows::Win32::System::Com::IClassFactory;
 use windows::Win32::System::SystemServices::DLL_PROCESS_ATTACH;
-use windows::{core::{Interface, GUID, HRESULT}, Win32::Foundation::S_OK};
+use windows::{
+    core::{Interface, GUID, HRESULT},
+    Win32::Foundation::S_OK,
+};
 
 use crate::check_err;
 use crate::factory::IMEClassFactory;
 use crate::register::*;
+use crate::utils::error::set_panic_hook;
 use crate::utils::globals::GUID_TEXT_SERVICE;
 use crate::utils::winutils::get_module_path;
 
@@ -109,6 +113,8 @@ pub extern "system" fn DllGetClassObject(
 
 #[no_mangle]
 pub extern "system" fn DllRegisterServer() -> HRESULT {
+    set_panic_hook().unwrap();
+
     let result = ProfileMgr::register(get_module_path().as_str());
     check_err!(result);
 

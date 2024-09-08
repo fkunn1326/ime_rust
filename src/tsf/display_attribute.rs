@@ -1,5 +1,6 @@
 use std::cell::Cell;
 
+use windows::core::{implement, Error, Result, BSTR, GUID};
 use windows::Win32::{
     Foundation::FALSE,
     UI::TextServices::{
@@ -10,7 +11,6 @@ use windows::Win32::{
         TF_LS_SOLID, TF_LS_SQUIGGLE,
     },
 };
-use windows::core::{implement, Error, Result, BSTR, GUID};
 
 use crate::utils::globals::{
     GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,

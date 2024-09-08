@@ -1,16 +1,24 @@
+use std::borrow::BorrowMut;
+
 use windows::{
-    core::{w, Interface, Result, GUID, PCWSTR},
+    core::{Interface, Result, GUID},
     Win32::{
-        Foundation::{HMODULE, MAX_PATH},
+        Foundation::{HANDLE, HMODULE, MAX_PATH},
+        Storage::FileSystem::WriteFile,
         System::{
             Com::{CoCreateInstance, CLSCTX_INPROC_SERVER},
             LibraryLoader::GetModuleFileNameW,
         },
-        UI::WindowsAndMessaging::{MessageBoxW, MB_OK},
     },
 };
 
 use crate::dll::DllModule;
+
+#[derive(serde::Serialize)]
+struct KeyEvent {
+    r#type: String,
+    message: String,
+}
 
 pub trait GUIDExt {
     fn to_string(&self) -> String;
@@ -69,8 +77,22 @@ pub fn get_module_path() -> String {
     }
 }
 
-pub fn alert(msg: &str) {
+pub fn debug(handle: HANDLE, message: &str) -> Result<()> {
+    let message = serde_json::to_string(&KeyEvent {
+        r#type: "debug".to_string(),
+        message: message.to_string(),
+    })
+    .unwrap();
+
+    let wide: Vec<u8> = message.to_string().into_bytes();
+    let message_len = wide.len();
     unsafe {
-        MessageBoxW(None, PCWSTR(to_wide_16(msg).as_ptr()), w!("Alert"), MB_OK);
-    }
+        WriteFile(
+            handle,
+            Some(&wide),
+            Some((message_len as u32).borrow_mut()),
+            None,
+        )
+    }?;
+    Ok(())
 }

@@ -1,7 +1,7 @@
+use windows::core::{implement, Result};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfEditRecord, ITfTextEditSink, ITfTextEditSink_Impl,
 };
-use windows::core::{implement, Result};
 
 #[implement(ITfTextEditSink)]
 pub struct TextEditSink;

@@ -1,17 +1,25 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::mpsc;
+use std::thread;
 
-use windows::core::{Interface, Result, implement, AsImpl, w};
+use windows::core::{implement, w, AsImpl, Interface, Result};
 use windows::Win32::Foundation::{CloseHandle, BOOL, GENERIC_READ, GENERIC_WRITE, HANDLE};
-use windows::Win32::Storage::FileSystem::{CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING};
-use windows::Win32::UI::TextServices::{
-    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfCompositionSink, ITfCompositionSink_Impl, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink
+use windows::Win32::Storage::FileSystem::{
+    CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING,
 };
+use windows::Win32::UI::TextServices::{
+    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfCompositionSink, ITfCompositionSink_Impl,
+    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor,
+    ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink,
+};
+use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MESSAGEBOX_STYLE};
 
+use crate::ui::ui::{CandidateList, UiEvent};
 use crate::utils::globals::{
     GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,
 };
-use crate::utils::winutils::co_create_inproc;
+use crate::utils::winutils::{co_create_inproc, debug};
 
 use super::composition_mgr::CompositionMgr;
 use super::key_event_sink::KeyEventSink;
@@ -20,10 +28,7 @@ use super::thread_mgr_event_sink::ThreadMgrEventSink;
 
 // すべてを取りまとめるメインのクラス
 // Activate()とDeactivate()を実装しておけばいい
-#[implement(
-    ITfTextInputProcessor,
-    ITfCompositionSink
-)]
+#[implement(ITfTextInputProcessor, ITfCompositionSink)]
 pub struct TextService {
     this: RefCell<Option<ITfTextInputProcessor>>,
     client_id: RefCell<u32>,
@@ -49,6 +54,9 @@ pub struct TextService {
 
     // pipe handle
     pipe_handle: RefCell<Option<HANDLE>>,
+
+    // sender
+    ui_proxy: RefCell<Option<mpsc::Sender<UiEvent>>>,
 }
 
 impl TextService {
@@ -72,6 +80,8 @@ impl TextService {
             composition_mgr: RefCell::new(None),
 
             pipe_handle: RefCell::new(None),
+
+            ui_proxy: RefCell::new(None),
         }
     }
 
@@ -98,13 +108,27 @@ impl TextService {
         self.activate_language_bar()?;
         self.activate_display_attribute()?;
         self.activate_pipe()?;
+
+        debug(self.pipe_handle.borrow().clone().unwrap(), "Activated")?;
+
+        let (tx, rx) = mpsc::channel::<UiEvent>();
+
+        thread::spawn(move || {
+            CandidateList::create(rx);
+        });
+
+        self.ui_proxy.replace(Some(tx));
+
         self.activate_composition_mgr()?;
         self.activate_key_event_sink()?;
+
         Ok(())
     }
 
     // deactivate()
     fn deactivate(&self) -> Result<()> {
+        debug(self.pipe_handle.borrow().clone().unwrap(), "Deactivated")?;
+
         self.deactivate_thread_mgr_event_sink()?;
         self.deactivate_language_bar()?;
         self.deactivate_display_attribute()?;
@@ -206,16 +230,18 @@ impl TextService {
         let sink: ITfKeyEventSink = KeyEventSink::new(
             self.composition_mgr.borrow().clone().unwrap(),
             self.pipe_handle.borrow().clone().unwrap(),
-        ).into();
-    
+            self.ui_proxy.borrow().clone().unwrap(),
+        )
+        .into();
+
         let source: ITfKeystrokeMgr = self.thread_mgr.borrow().clone().unwrap().cast()?;
-    
+
         unsafe {
             source.AdviseKeyEventSink(self.client_id.borrow().clone(), &sink, BOOL::from(true))?;
         }
-    
+
         self.key_event_sink.borrow_mut().replace(sink.into());
-    
+
         Ok(())
     }
 
@@ -267,7 +293,11 @@ impl ITfTextInputProcessor_Impl for TextService_Impl {
 }
 
 impl ITfCompositionSink_Impl for TextService_Impl {
-    fn OnCompositionTerminated(&self,_ecwrite:u32,_pcomposition:Option<&windows::Win32::UI::TextServices::ITfComposition>) -> windows_core::Result<()> {
+    fn OnCompositionTerminated(
+        &self,
+        _ecwrite: u32,
+        _pcomposition: Option<&windows::Win32::UI::TextServices::ITfComposition>,
+    ) -> windows_core::Result<()> {
         Ok(())
     }
 }

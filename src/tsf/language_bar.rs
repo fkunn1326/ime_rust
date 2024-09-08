@@ -1,4 +1,5 @@
 use windows::core::Error;
+use windows::core::{implement, IUnknown, Interface, Result, BSTR, GUID, PCWSTR};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::UI::TextServices::{
     ITfLangBarItemSink, GUID_LBI_INPUTMODE, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_TEXTCOLORICON,
@@ -15,7 +16,6 @@ use windows::Win32::{
         WindowsAndMessaging::{LoadImageW, HICON, IMAGE_ICON, LR_DEFAULTCOLOR},
     },
 };
-use windows::core::{implement, Interface, IUnknown, Result, BSTR, GUID, PCWSTR};
 
 use crate::utils::globals::GUID_TEXT_SERVICE;
 use crate::{dll::DllModule, utils::globals::TEXTSERVICE_LANGBARITEMSINK_COOKIE};

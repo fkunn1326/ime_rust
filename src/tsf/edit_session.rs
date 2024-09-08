@@ -1,7 +1,7 @@
+use windows::core::{implement, Result};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfEditSession, ITfEditSession_Impl, TF_ES_READWRITE, TF_ES_SYNC,
 };
-use windows::core::{implement, Result};
 
 use std::rc::Rc;
 
