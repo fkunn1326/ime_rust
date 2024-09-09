@@ -1,5 +1,5 @@
 use windows::{
-    core::{implement, AsImpl, Error, IUnknown, Interface, Result, GUID},
+    core::{implement, AsImpl, IUnknown, Interface, Result, GUID},
     Win32::{
         Foundation::{BOOL, E_NOINTERFACE},
         System::Com::{IClassFactory, IClassFactory_Impl},
@@ -31,11 +31,11 @@ impl IClassFactory_Impl for IMEClassFactory_Impl {
         *ppvobject = std::ptr::null_mut();
 
         if punkouter.is_some() {
-            return Err(Error::from(E_NOINTERFACE));
+            return Err(E_NOINTERFACE.into());
         }
 
         if *riid != ITfTextInputProcessor::IID && *riid != IUnknown::IID {
-            return Err(Error::from(E_NOINTERFACE));
+            return Err(E_NOINTERFACE.into());
         }
 
         let text_service: ITfTextInputProcessor = TextService::new().into();

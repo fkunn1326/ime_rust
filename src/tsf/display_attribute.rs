@@ -1,14 +1,12 @@
 use std::cell::Cell;
 
-use windows::core::{implement, Error, Result, BSTR, GUID};
+use windows::core::{implement, Result, BSTR, GUID};
 use windows::Win32::{
     Foundation::FALSE,
     UI::TextServices::{
         IEnumTfDisplayAttributeInfo, IEnumTfDisplayAttributeInfo_Impl, ITfDisplayAttributeInfo,
-        ITfDisplayAttributeInfo_Impl, ITfDisplayAttributeProvider,
-        ITfDisplayAttributeProvider_Impl, TF_ATTR_CONVERTED, TF_ATTR_INPUT,
-        TF_ATTR_TARGET_CONVERTED, TF_CT_NONE, TF_DA_COLOR, TF_DA_COLOR_0, TF_DISPLAYATTRIBUTE,
-        TF_LS_SOLID, TF_LS_SQUIGGLE,
+        ITfDisplayAttributeInfo_Impl, TF_ATTR_CONVERTED, TF_ATTR_INPUT, TF_ATTR_TARGET_CONVERTED,
+        TF_CT_NONE, TF_DA_COLOR, TF_DA_COLOR_0, TF_DISPLAYATTRIBUTE, TF_LS_SOLID, TF_LS_SQUIGGLE,
     },
 };
 
@@ -83,7 +81,7 @@ pub const DISPLAY_ATTRIBUTE_INPUT: TF_DISPLAYATTRIBUTE = TF_DISPLAYATTRIBUTE {
 #[implement(ITfDisplayAttributeInfo)]
 pub struct DisplayAttributeInfo {
     description: String,
-    guid: GUID,
+    pub guid: GUID,
     attribute: Cell<TF_DISPLAYATTRIBUTE>,
     attribute_backup: TF_DISPLAYATTRIBUTE,
 }
@@ -130,7 +128,7 @@ impl ITfDisplayAttributeInfo_Impl for DisplayAttributeInfo_Impl {
 
 #[implement(IEnumTfDisplayAttributeInfo)]
 pub struct EnumDisplayAttributeInfo {
-    attributes: Vec<DisplayAttributeInfo>,
+    pub attributes: Vec<DisplayAttributeInfo>,
     index: Cell<usize>,
 }
 
@@ -204,29 +202,5 @@ impl IEnumTfDisplayAttributeInfo_Impl for EnumDisplayAttributeInfo_Impl {
         let index = self.index.get() + ulcount as usize;
         self.index.set(index);
         Ok(())
-    }
-}
-
-#[implement(ITfDisplayAttributeProvider)]
-pub struct DisplayAttributeProvider;
-
-impl ITfDisplayAttributeProvider_Impl for DisplayAttributeProvider_Impl {
-    fn EnumDisplayAttributeInfo(&self) -> Result<IEnumTfDisplayAttributeInfo> {
-        let enum_info = EnumDisplayAttributeInfo::new();
-        Ok(enum_info.into())
-    }
-
-    fn GetDisplayAttributeInfo(
-        &self,
-        guid: *const windows::core::GUID,
-    ) -> Result<ITfDisplayAttributeInfo> {
-        let guid = unsafe { *guid };
-        let attributes = EnumDisplayAttributeInfo::new();
-        for attribute in attributes.attributes {
-            if attribute.guid == guid {
-                return Ok(attribute.into());
-            }
-        }
-        Err(Error::empty())
     }
 }

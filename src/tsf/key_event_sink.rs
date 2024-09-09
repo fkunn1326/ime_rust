@@ -9,7 +9,6 @@ use windows::Win32::{
 };
 
 use crate::ui::ui::{CandidateEvent, UiEvent};
-use crate::utils::winutils::debug;
 
 use super::composition_mgr::CompositionMgr;
 
@@ -90,17 +89,13 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
 
         let pos = self.composition_mgr.get_pos()?;
 
-        self.ui_proxy.send(
-            UiEvent::Locate(pos)
-        ).unwrap();
+        self.ui_proxy.send(UiEvent::Locate(pos)).unwrap();
 
-        self.ui_proxy.send(
-            UiEvent::Candidate(
-                CandidateEvent {
-                    candidates: response.iter().map(|s| s.to_string()).collect(),
-                }
-            )
-        ).unwrap();
+        self.ui_proxy
+            .send(UiEvent::Candidate(CandidateEvent {
+                candidates: response.iter().map(|s| s.to_string()).collect(),
+            }))
+            .unwrap();
 
         self.composition_mgr.set_text(&response[0])?;
 

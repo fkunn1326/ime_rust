@@ -10,8 +10,8 @@ use tao::{
 use windows::Win32::{
     Foundation::HWND,
     UI::WindowsAndMessaging::{
-        SetWindowLongW, ShowWindow, GWL_EXSTYLE, GWL_STYLE, SW_SHOWNOACTIVATE, WS_EX_NOACTIVATE, WS_EX_TOOLWINDOW,
-        WS_EX_TOPMOST, WS_POPUP,
+        SetWindowLongW, ShowWindow, GWL_EXSTYLE, GWL_STYLE, SW_SHOWNOACTIVATE, WS_EX_NOACTIVATE,
+        WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
     },
 };
 use wry::WebViewBuilder;
@@ -70,7 +70,8 @@ impl CandidateList {
         }
 
         let webview = WebViewBuilder::new(&window)
-            .with_html(r#"
+            .with_html(
+                r#"
             <html>
                 <body style="background: #D2D2D2">
                     <ol>
@@ -94,7 +95,8 @@ impl CandidateList {
                         }
                     </script>
                 </body>
-            </html>"#)
+            </html>"#,
+            )
             .build()
             .unwrap();
 
@@ -104,13 +106,14 @@ impl CandidateList {
         std::thread::spawn(move || loop {
             let message = rx.recv().unwrap();
             match message {
-                UiEvent::Locate(event) => {
-                    window.set_outer_position(
-                        PhysicalPosition::new(event.x as f64, (event.y + 50 as i32) as f64),
-                    )
-                }
+                UiEvent::Locate(event) => window.set_outer_position(PhysicalPosition::new(
+                    event.x as f64,
+                    (event.y + 50 as i32) as f64,
+                )),
                 UiEvent::Candidate(event) => {
-                    event_loop_proxy.send_event(event.candidates[0..5].join(",")).unwrap();
+                    event_loop_proxy
+                        .send_event(event.candidates[0..5].join(","))
+                        .unwrap();
                 }
                 UiEvent::Show => {
                     // let _ = ShowWindow(HWND(hwnd), SW_SHOWNOACTIVATE);
@@ -125,7 +128,7 @@ impl CandidateList {
             *control_flow = ControlFlow::Wait;
 
             match event {
-                Event::NewEvents(StartCause::Init) => {},
+                Event::NewEvents(StartCause::Init) => {}
                 Event::WindowEvent {
                     event: WindowEvent::CloseRequested,
                     ..

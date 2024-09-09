@@ -4,16 +4,17 @@ use std::sync::mpsc;
 use std::thread;
 
 use windows::core::{implement, w, AsImpl, Interface, Result};
-use windows::Win32::Foundation::{CloseHandle, BOOL, GENERIC_READ, GENERIC_WRITE, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, BOOL, E_FAIL, GENERIC_READ, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING,
 };
 use windows::Win32::UI::TextServices::{
-    CLSID_TF_CategoryMgr, ITfCategoryMgr, ITfCompositionSink, ITfCompositionSink_Impl,
-    ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton, ITfSource, ITfTextInputProcessor,
-    ITfTextInputProcessor_Impl, ITfThreadMgr, ITfThreadMgrEventSink,
+    CLSID_TF_CategoryMgr, IEnumTfDisplayAttributeInfo, ITfCategoryMgr, ITfCompositionSink,
+    ITfCompositionSink_Impl, ITfDisplayAttributeInfo, ITfDisplayAttributeProvider,
+    ITfDisplayAttributeProvider_Impl, ITfKeyEventSink, ITfKeystrokeMgr, ITfLangBarItemButton,
+    ITfSource, ITfTextInputProcessor, ITfTextInputProcessor_Impl, ITfThreadMgr,
+    ITfThreadMgrEventSink,
 };
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MESSAGEBOX_STYLE};
 
 use crate::ui::ui::{CandidateList, UiEvent};
 use crate::utils::globals::{
@@ -22,13 +23,14 @@ use crate::utils::globals::{
 use crate::utils::winutils::{co_create_inproc, debug};
 
 use super::composition_mgr::CompositionMgr;
+use super::display_attribute;
 use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
 use super::thread_mgr_event_sink::ThreadMgrEventSink;
 
 // すべてを取りまとめるメインのクラス
 // Activate()とDeactivate()を実装しておけばいい
-#[implement(ITfTextInputProcessor, ITfCompositionSink)]
+#[implement(ITfTextInputProcessor, ITfCompositionSink, ITfDisplayAttributeProvider)]
 pub struct TextService {
     this: RefCell<Option<ITfTextInputProcessor>>,
     client_id: RefCell<u32>,
@@ -213,7 +215,10 @@ impl TextService {
         let this: ITfTextInputProcessor = self.this.borrow().clone().unwrap();
         let sink: ITfCompositionSink = this.cast()?;
 
-        let composition_mgr = CompositionMgr::new(client_id, sink);
+        let display_attribute_atom = self.display_attribute_atom.borrow().clone();
+        let display_attribute = display_attribute_atom.get("focused").unwrap();
+
+        let composition_mgr = CompositionMgr::new(client_id, sink, *display_attribute);
         self.composition_mgr.replace(Some(composition_mgr));
 
         Ok(())
@@ -299,5 +304,26 @@ impl ITfCompositionSink_Impl for TextService_Impl {
         _pcomposition: Option<&windows::Win32::UI::TextServices::ITfComposition>,
     ) -> windows_core::Result<()> {
         Ok(())
+    }
+}
+
+impl ITfDisplayAttributeProvider_Impl for TextService_Impl {
+    fn EnumDisplayAttributeInfo(&self) -> Result<IEnumTfDisplayAttributeInfo> {
+        let enum_info = display_attribute::EnumDisplayAttributeInfo::new();
+        Ok(enum_info.into())
+    }
+
+    fn GetDisplayAttributeInfo(
+        &self,
+        guid: *const windows_core::GUID,
+    ) -> Result<ITfDisplayAttributeInfo> {
+        let guid = unsafe { *guid };
+        let attributes = display_attribute::EnumDisplayAttributeInfo::new();
+        for attribute in attributes.attributes {
+            if attribute.guid == guid {
+                return Ok(attribute.into());
+            }
+        }
+        Err(E_FAIL.into())
     }
 }

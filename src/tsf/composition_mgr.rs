@@ -1,10 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
+use windows::core::VARIANT;
 use windows::core::{Interface, Result};
 use windows::Win32::Foundation::{BOOL, RECT};
 use windows::Win32::UI::TextServices::{
     ITfComposition, ITfCompositionSink, ITfContext, ITfContextComposition, ITfInsertAtSelection,
-    TF_IAS_QUERYONLY,
+    GUID_PROP_ATTRIBUTE, TF_IAS_QUERYONLY,
 };
 
 use crate::ui::ui::LocateEvent;
@@ -18,16 +19,18 @@ pub struct CompositionMgr {
     context: Rc<RefCell<Option<ITfContext>>>,
     sink: ITfCompositionSink,
     client_id: u32,
+    display_attribute: u32,
     pub preedit: RefCell<String>,
 }
 
 impl CompositionMgr {
-    pub fn new(client_id: u32, sink: ITfCompositionSink) -> Self {
+    pub fn new(client_id: u32, sink: ITfCompositionSink, display_attribute: u32) -> Self {
         CompositionMgr {
             composition: Rc::new(RefCell::new(None)),
             context: Rc::new(RefCell::new(None)),
             sink,
             client_id,
+            display_attribute,
             preedit: RefCell::new(String::new()),
         }
     }
@@ -75,13 +78,19 @@ impl CompositionMgr {
     pub fn set_text(&self, text: &str) -> Result<()> {
         self.preedit.replace(text.to_string());
         let composition = self.composition.borrow().clone().unwrap();
+        let context = self.context.borrow().clone().unwrap();
         let wide_text = to_wide_16(text);
+        let pvar = VARIANT::from(self.display_attribute as i32);
+
         EditSession::handle(
             self.client_id,
             self.context.borrow().clone().unwrap(),
             Rc::new(move |cookie| unsafe {
                 let range = composition.GetRange()?;
                 range.SetText(cookie, 0, &wide_text)?;
+
+                let prop = context.GetProperty(&GUID_PROP_ATTRIBUTE)?;
+                prop.SetValue(cookie, &range, &pvar)?;
                 Ok(())
             }),
         )?;

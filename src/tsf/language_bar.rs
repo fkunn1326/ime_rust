@@ -1,4 +1,3 @@
-use windows::core::Error;
 use windows::core::{implement, IUnknown, Interface, Result, BSTR, GUID, PCWSTR};
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::UI::TextServices::{
@@ -126,11 +125,11 @@ impl ITfSource_Impl for LanguageBar_Impl {
         let riid = unsafe { *riid };
 
         if riid != ITfLangBarItemSink::IID {
-            return Err(Error::from(E_INVALIDARG));
+            return Err(E_INVALIDARG.into());
         }
 
         if punk.is_none() {
-            return Err(Error::from(E_INVALIDARG));
+            return Err(E_INVALIDARG.into());
         }
 
         Ok(TEXTSERVICE_LANGBARITEMSINK_COOKIE)
@@ -138,7 +137,7 @@ impl ITfSource_Impl for LanguageBar_Impl {
 
     fn UnadviseSink(&self, dw_cookie: u32) -> Result<()> {
         if dw_cookie != TEXTSERVICE_LANGBARITEMSINK_COOKIE {
-            return Err(Error::from(CONNECT_E_CANNOTCONNECT));
+            return Err(CONNECT_E_CANNOTCONNECT.into());
         }
 
         Ok(())
