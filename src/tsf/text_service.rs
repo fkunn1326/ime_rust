@@ -22,7 +22,7 @@ use crate::utils::globals::{
 };
 use crate::utils::winutils::{co_create_inproc, debug};
 
-use super::composition_mgr::CompositionMgr;
+use super::composition_mgr::{self, CompositionMgr};
 use super::display_attribute;
 use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
@@ -106,7 +106,6 @@ impl TextService {
             )?));
         self.client_id.replace(tid);
 
-        self.activate_thread_mgr_event_sink()?;
         self.activate_language_bar()?;
         self.activate_display_attribute()?;
         self.activate_pipe()?;
@@ -122,6 +121,7 @@ impl TextService {
         self.ui_proxy.replace(Some(tx));
 
         self.activate_composition_mgr()?;
+        self.activate_thread_mgr_event_sink()?;
         self.activate_key_event_sink()?;
 
         Ok(())
@@ -142,7 +142,10 @@ impl TextService {
 
     // ThreadMgrEventSink
     fn activate_thread_mgr_event_sink(&self) -> Result<()> {
-        let sink: ITfThreadMgrEventSink = ThreadMgrEventSink::new().into();
+        let composition_mgr = self.composition_mgr.borrow().clone().unwrap();
+        let handle = self.pipe_handle.borrow().clone().unwrap();
+
+        let sink: ITfThreadMgrEventSink = ThreadMgrEventSink::new(composition_mgr.clone(), handle.clone()).into();
         let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
 
         let cookie = unsafe { source.AdviseSink(&ITfThreadMgrEventSink::IID, &sink) }?;
@@ -150,7 +153,7 @@ impl TextService {
         self.thread_mgr_event_sink_cookie.replace(cookie);
         self.thread_mgr_event_sink
             .borrow_mut()
-            .replace(ThreadMgrEventSink::new().into());
+            .replace(ThreadMgrEventSink::new(composition_mgr, handle).into());
 
         Ok(())
     }

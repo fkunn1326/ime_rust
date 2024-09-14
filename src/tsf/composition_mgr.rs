@@ -1,12 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
-use windows::core::VARIANT;
-use windows::core::{Interface, Result};
+use windows::core::{IUnknown, Interface, Result, VARIANT};
 use windows::Win32::Foundation::{BOOL, RECT};
 use windows::Win32::UI::TextServices::{
-    ITfComposition, ITfCompositionSink, ITfContext, ITfContextComposition, ITfInsertAtSelection,
-    GUID_PROP_ATTRIBUTE, TF_IAS_QUERYONLY,
+    ITfCompartmentMgr, ITfComposition, ITfCompositionSink, ITfContext, ITfContextComposition,
+    ITfDocumentMgr, ITfInsertAtSelection, ITfRange, GUID_COMPARTMENT_TRANSITORYEXTENSION_PARENT,
+    GUID_PROP_ATTRIBUTE, TF_ANCHOR_START, TF_DEFAULT_SELECTION, TF_HALTCOND, TF_HF_OBJECT,
+    TF_IAS_QUERYONLY, TF_SELECTION, TF_TF_MOVESTART,
 };
+
+use std::mem::ManuallyDrop;
 
 use crate::ui::ui::LocateEvent;
 use crate::utils::winutils::to_wide_16;
@@ -127,5 +130,90 @@ impl CompositionMgr {
             x: rect.left,
             y: rect.top,
         })
+    }
+
+    pub fn get_preceding_text(&self) -> Result<String> {
+        // mozcの実装を参考に
+        // https://github.com/google/mozc/blob/master/src/win32/tip/tip_surrounding_text.cc
+        unsafe {
+            let preceding_text = Rc::new(RefCell::new(String::default()));
+
+            let context = self.context.borrow().clone().unwrap();
+            let docmgr = context.GetDocumentMgr()?;
+
+            // mozcにはcontext_mgrがあるが、パス
+
+            let compartment_mgr: ITfCompartmentMgr = docmgr.cast()?;
+            let compartment =
+                compartment_mgr.GetCompartment(&GUID_COMPARTMENT_TRANSITORYEXTENSION_PARENT)?;
+
+            let variant = compartment.GetValue()?;
+            let variant_punk = variant.as_raw().Anonymous.Anonymous.Anonymous.punkVal;
+            let variant_unk: IUnknown = std::mem::transmute(variant_punk);
+
+            let parent_docmgr: ITfDocumentMgr = variant_unk.cast()?;
+            let parent_context = parent_docmgr.GetTop()?;
+
+            EditSession::handle(
+                self.client_id,
+                parent_context.clone(),
+                Rc::new({
+                    // parent contextの取得
+                    let preceding_text_clone = Rc::clone(&preceding_text);
+
+                    move |cookie| {
+                        // いろいろ準備
+                        let mut pselection: [TF_SELECTION; 1] = [TF_SELECTION::default()];
+                        let mut pfetched = 0;
+                        parent_context.GetSelection(
+                            cookie,
+                            TF_DEFAULT_SELECTION,
+                            &mut pselection,
+                            &mut pfetched,
+                        )?;
+
+                        let prange = &pselection[0].range;
+                        let range =
+                            <std::option::Option<ITfRange> as Clone>::clone(&prange).unwrap();
+
+                        // rangeの準備
+                        let mut preceding_range_shifted = 0;
+
+                        let halt_cond = TF_HALTCOND {
+                            pHaltRange: ManuallyDrop::new(None),
+                            aHaltPos: TF_ANCHOR_START,
+                            dwFlags: TF_HF_OBJECT,
+                        };
+
+                        let preceding_range = range.Clone()?;
+                        preceding_range.Collapse(cookie, TF_ANCHOR_START)?;
+                        preceding_range.ShiftStart(
+                            cookie,
+                            -20,
+                            &mut preceding_range_shifted,
+                            &halt_cond,
+                        )?;
+
+                        // 前のテキストを取得
+                        let mut pchtext = [0u16; 64];
+                        let mut pcch = 0;
+                        preceding_range.GetText(
+                            cookie,
+                            TF_TF_MOVESTART,
+                            &mut pchtext,
+                            &mut pcch,
+                        )?;
+
+                        preceding_text_clone
+                            .replace(String::from_utf16_lossy(&pchtext[..pcch as usize]));
+
+                        Ok(())
+                    }
+                }),
+            )?;
+
+            let result = preceding_text.borrow().clone();
+            Ok(result)
+        }
     }
 }

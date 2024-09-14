@@ -35,9 +35,9 @@ impl KeyEventSink {
 }
 
 #[derive(serde::Serialize)]
-struct KeyEvent {
-    r#type: String,
-    message: String,
+pub struct KeyEvent {
+    pub r#type: String,
+    pub message: String,
 }
 
 impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
@@ -81,11 +81,6 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
 
         let response = String::from_utf8_lossy(&buffer[..]);
         let response: Vec<&str> = response.split(',').collect();
-
-        if self.composition_mgr.composition.borrow().clone().is_none() {
-            self.composition_mgr
-                .start_composition(pic.unwrap().clone())?;
-        }
 
         let pos = self.composition_mgr.get_pos()?;
 
