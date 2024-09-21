@@ -1,13 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 use std::thread;
 
-use windows::core::{implement, w, AsImpl, Interface, Result};
-use windows::Win32::Foundation::{CloseHandle, BOOL, E_FAIL, GENERIC_READ, GENERIC_WRITE, HANDLE};
-use windows::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_NONE, OPEN_EXISTING,
-};
+use windows::core::{implement, AsImpl, Interface, Result};
+use windows::Win32::Foundation::{BOOL, E_FAIL};
 use windows::Win32::UI::TextServices::{
     CLSID_TF_CategoryMgr, IEnumTfDisplayAttributeInfo, ITfCategoryMgr, ITfCompositionSink,
     ITfCompositionSink_Impl, ITfDisplayAttributeInfo, ITfDisplayAttributeProvider,
@@ -16,13 +13,14 @@ use windows::Win32::UI::TextServices::{
     ITfThreadMgrEventSink,
 };
 
-use crate::ui::ui::{CandidateList, UiEvent};
+use crate::ui::{CandidateList, UiEvent};
 use crate::utils::globals::{
     GUID_DISPLAY_ATTRIBUTE_CONVERTED, GUID_DISPLAY_ATTRIBUTE_FOCUSED, GUID_DISPLAY_ATTRIBUTE_INPUT,
 };
-use crate::utils::winutils::{co_create_inproc, debug};
+use crate::utils::winutils::co_create_inproc;
+use ipc::socket::SocketManager;
 
-use super::composition_mgr::{self, CompositionMgr};
+use super::composition_mgr::CompositionMgr;
 use super::display_attribute;
 use super::key_event_sink::KeyEventSink;
 use super::language_bar::LanguageBar;
@@ -54,11 +52,11 @@ pub struct TextService {
     // composition manager
     composition_mgr: RefCell<Option<CompositionMgr>>,
 
-    // pipe handle
-    pipe_handle: RefCell<Option<HANDLE>>,
+    // socket manager
+    socket_mgr: RefCell<Option<SocketManager>>,
 
-    // sender
-    ui_proxy: RefCell<Option<mpsc::Sender<UiEvent>>>,
+    // ui proxy
+    ui_proxy: RefCell<Option<Sender<UiEvent>>>,
 }
 
 impl TextService {
@@ -81,7 +79,7 @@ impl TextService {
 
             composition_mgr: RefCell::new(None),
 
-            pipe_handle: RefCell::new(None),
+            socket_mgr: RefCell::new(None),
 
             ui_proxy: RefCell::new(None),
         }
@@ -108,13 +106,11 @@ impl TextService {
 
         self.activate_language_bar()?;
         self.activate_display_attribute()?;
-        self.activate_pipe()?;
+        self.activate_socket()?;
 
-        debug(self.pipe_handle.borrow().clone().unwrap(), "Activated")?;
+        let (tx, rx) = std::sync::mpsc::channel();
 
-        let (tx, rx) = mpsc::channel::<UiEvent>();
-
-        thread::spawn(move || {
+        thread::spawn(|| {
             CandidateList::create(rx);
         });
 
@@ -129,23 +125,22 @@ impl TextService {
 
     // deactivate()
     fn deactivate(&self) -> Result<()> {
-        debug(self.pipe_handle.borrow().clone().unwrap(), "Deactivated")?;
-
         self.deactivate_thread_mgr_event_sink()?;
         self.deactivate_language_bar()?;
         self.deactivate_display_attribute()?;
         self.deactivate_composition_mgr()?;
         self.deactivate_key_event_sink()?;
-        self.deactivate_pipe()?;
+        self.deactivate_socket()?;
         Ok(())
     }
 
     // ThreadMgrEventSink
     fn activate_thread_mgr_event_sink(&self) -> Result<()> {
         let composition_mgr = self.composition_mgr.borrow().clone().unwrap();
-        let handle = self.pipe_handle.borrow().clone().unwrap();
+        let socket_mgr = self.socket_mgr.borrow().clone().unwrap();
 
-        let sink: ITfThreadMgrEventSink = ThreadMgrEventSink::new(composition_mgr.clone(), handle.clone()).into();
+        let sink: ITfThreadMgrEventSink =
+            ThreadMgrEventSink::new(composition_mgr.clone(), socket_mgr.clone()).into();
         let source: ITfSource = self.thread_mgr.borrow().clone().unwrap().cast()?;
 
         let cookie = unsafe { source.AdviseSink(&ITfThreadMgrEventSink::IID, &sink) }?;
@@ -153,7 +148,7 @@ impl TextService {
         self.thread_mgr_event_sink_cookie.replace(cookie);
         self.thread_mgr_event_sink
             .borrow_mut()
-            .replace(ThreadMgrEventSink::new(composition_mgr, handle).into());
+            .replace(ThreadMgrEventSink::new(composition_mgr, socket_mgr).into());
 
         Ok(())
     }
@@ -200,8 +195,6 @@ impl TextService {
             atom_map.insert("converted", converted_atom);
         }
 
-        // alert(&format!("input: {:?}", atom_map));
-
         self.display_attribute_atom.replace(atom_map);
 
         Ok(())
@@ -237,7 +230,7 @@ impl TextService {
     fn activate_key_event_sink(&self) -> Result<()> {
         let sink: ITfKeyEventSink = KeyEventSink::new(
             self.composition_mgr.borrow().clone().unwrap(),
-            self.pipe_handle.borrow().clone().unwrap(),
+            self.socket_mgr.borrow().clone().unwrap(),
             self.ui_proxy.borrow().clone().unwrap(),
         )
         .into();
@@ -262,28 +255,13 @@ impl TextService {
         Ok(())
     }
 
-    fn activate_pipe(&self) -> Result<()> {
-        let handle = unsafe {
-            CreateFileW(
-                w!("\\\\.\\pipe\\azookey_service"),
-                GENERIC_WRITE.0 | GENERIC_READ.0,
-                FILE_SHARE_NONE,
-                None,
-                OPEN_EXISTING,
-                FILE_ATTRIBUTE_NORMAL,
-                None,
-            )
-        }?;
-
-        self.pipe_handle.replace(Some(handle));
+    fn activate_socket(&self) -> Result<()> {
+        let socket_mgr = SocketManager::new()?;
+        self.socket_mgr.replace(Some(socket_mgr));
         Ok(())
     }
 
-    fn deactivate_pipe(&self) -> Result<()> {
-        let handle = self.pipe_handle.borrow().clone().unwrap();
-        unsafe {
-            CloseHandle(handle)?;
-        }
+    fn deactivate_socket(&self) -> Result<()> {
         Ok(())
     }
 }

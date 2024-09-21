@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package ipc;
+
+import "common.proto";
+
+message ConversionRequest {
+  int32 virtual_key_code = 1;  // 仮想キーコード（VK_*）
+}
+
+message ConversionResponse {
+  string converted_text = 1;  // 変換済みのテキスト
+  repeated Candidate candidates = 2;  // 変換候補
+}
+
+message UpdateWindowState {
+  bool show_window = 1;  // ウィンドウを表示するか
+  bool hide_window = 2;  // ウィンドウを非表示にするか
+}
+
+message SelectCandidateRequest {
+  int32 selected_candidate_index = 1;  // 選択している変換候補のindex
+}
+
+message Candidate {
+  string text = 1;  // 候補のテキスト
+}
+
+service ConverterService {
+  rpc Convert (ConversionRequest) returns (ConversionResponse);
+  rpc UpdateWindow (UpdateWindowState) returns (Empty);
+  rpc SelectCandidate (SelectCandidateRequest) returns (Empty);
+}

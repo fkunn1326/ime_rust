@@ -1,14 +1,14 @@
-use std::borrow::BorrowMut;
-use std::sync::mpsc;
+use std::sync::mpsc::Sender;
 
 use windows::core::{implement, Result};
 use windows::Win32::{
-    Foundation::{BOOL, HANDLE, LPARAM, WPARAM},
-    Storage::FileSystem::{ReadFile, WriteFile},
+    Foundation::{BOOL, LPARAM, WPARAM},
     UI::TextServices::{ITfContext, ITfKeyEventSink, ITfKeyEventSink_Impl},
 };
 
-use crate::ui::ui::{CandidateEvent, UiEvent};
+use ipc::socket::SocketManager;
+
+use crate::ui::{CandidateEvent, UiEvent};
 
 use super::composition_mgr::CompositionMgr;
 
@@ -16,19 +16,19 @@ use super::composition_mgr::CompositionMgr;
 #[implement(ITfKeyEventSink)]
 pub struct KeyEventSink {
     composition_mgr: CompositionMgr,
-    handle: HANDLE,
-    ui_proxy: mpsc::Sender<UiEvent>,
+    socket_mgr: SocketManager,
+    ui_proxy: Sender<UiEvent>,
 }
 
 impl KeyEventSink {
     pub fn new(
         composition_mgr: CompositionMgr,
-        handle: HANDLE,
-        ui_proxy: mpsc::Sender<UiEvent>,
+        socket_mgr: SocketManager,
+        ui_proxy: Sender<UiEvent>,
     ) -> Self {
         KeyEventSink {
             composition_mgr,
-            handle,
+            socket_mgr,
             ui_proxy,
         }
     }
@@ -55,32 +55,19 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
             message: code.to_string(),
         })
         .unwrap();
-        let message_len = message.len();
 
-        let wide: Vec<u8> = message.to_string().into_bytes();
-        unsafe {
-            WriteFile(
-                self.handle,
-                Some(&wide),
-                Some((message_len as u32).borrow_mut()),
-                None,
-            )
-        }?;
-
-        // サーバーからの応答を読み取り
-        let mut buffer = [0; 1024];
-        let buffer_len = buffer.len();
-        unsafe {
-            ReadFile(
-                self.handle,
-                Some(&mut buffer),
-                Some((buffer_len as u32).borrow_mut()),
-                None,
-            )
-        }?;
-
-        let response = String::from_utf8_lossy(&buffer[..]);
+        let response = self.socket_mgr.get(message).unwrap();
         let response: Vec<&str> = response.split(',').collect();
+
+        // let pos = self.composition_mgr.get_pos()?;
+
+        if self.composition_mgr.composition.borrow().clone().is_none() {
+            self.composition_mgr
+                .start_composition(pic.unwrap().clone())?;
+        }
+
+        self.composition_mgr
+            .set_text(&format!("{}", &response[0]))?;
 
         let pos = self.composition_mgr.get_pos()?;
 
@@ -92,7 +79,7 @@ impl ITfKeyEventSink_Impl for KeyEventSink_Impl {
             }))
             .unwrap();
 
-        self.composition_mgr.set_text(&response[0])?;
+        self.ui_proxy.send(UiEvent::Show).unwrap();
 
         Ok(BOOL::from(true))
     }

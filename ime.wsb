@@ -1,18 +1,15 @@
 <Configuration>
   <MappedFolders>
     <MappedFolder>
-      <HostFolder>D:\ime_rust\target\debug</HostFolder>
+      <HostFolder>D:\ime_rust\target\release</HostFolder>
       <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\IME</SandboxFolder>
-      <ReadOnly>true</ReadOnly>
     </MappedFolder>
     <MappedFolder>
       <HostFolder>D:\ime_rust\wsb</HostFolder>
-      <ReadOnly>true</ReadOnly>
     </MappedFolder>
     <MappedFolder>
       <HostFolder>D:\azookey-service\.build\x86_64-unknown-windows-msvc\release</HostFolder>
       <SandboxFolder>C:\Users\WDAGUtilityAccount\Desktop\Service</SandboxFolder>
-      <ReadOnly>true</ReadOnly>
     </MappedFolder>
   </MappedFolders>
   <LogonCommand>

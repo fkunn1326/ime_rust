@@ -1,0 +1,6 @@
+syntax = "proto3";
+
+package ipc;
+
+// 空のレスポンス用のメッセージ定義
+message Empty {}

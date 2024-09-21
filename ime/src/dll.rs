@@ -56,6 +56,7 @@ impl DllModule {
     }
 }
 
+#[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn DllMain(
     hinst: HMODULE,
@@ -74,6 +75,7 @@ pub extern "system" fn DllMain(
     BOOL::from(true)
 }
 
+#[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn DllCanUnloadNow() -> HRESULT {
     let dll_instance = DllModule::global().lock().unwrap();
@@ -83,6 +85,7 @@ pub extern "system" fn DllCanUnloadNow() -> HRESULT {
     return S_FALSE;
 }
 
+#[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn DllGetClassObject(
     rclsid: *const GUID,
@@ -111,6 +114,7 @@ pub extern "system" fn DllGetClassObject(
     return S_OK;
 }
 
+#[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn DllRegisterServer() -> HRESULT {
     set_panic_hook().unwrap();
@@ -127,6 +131,7 @@ pub extern "system" fn DllRegisterServer() -> HRESULT {
     return S_OK;
 }
 
+#[allow(non_snake_case)]
 #[no_mangle]
 pub extern "system" fn DllUnregisterServer() -> HRESULT {
     let result = ProfileMgr::unregister();

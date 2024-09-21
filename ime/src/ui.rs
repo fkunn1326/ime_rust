@@ -43,6 +43,8 @@ impl CandidateList {
             .build();
         let window = WindowBuilder::new()
             .with_title("CandidateList")
+            .with_focused(false)
+            .with_visible(false)
             .build(&event_loop)
             .unwrap();
 
@@ -56,18 +58,18 @@ impl CandidateList {
 
         // set extended window style
         // https://docs.microsoft.com/en-us/windows/win32/winmsg/extended-window-styles
+        // https://docs.microsoft.com/en-us/windows/win32/winmsg/window-styles
         unsafe {
             let exnewstyle = WS_EX_TOOLWINDOW.0 | WS_EX_NOACTIVATE.0 | WS_EX_TOPMOST.0;
             SetWindowLongW(HWND(hwnd), GWL_EXSTYLE, exnewstyle as i32);
-        };
 
-        // set window style
-        // https://docs.microsoft.com/en-us/windows/win32/winmsg/window-styles
-        unsafe {
             let style = WS_POPUP.0;
             SetWindowLongW(HWND(hwnd), GWL_STYLE, style as i32);
-            let _ = ShowWindow(HWND(hwnd), SW_SHOWNOACTIVATE);
-        }
+        };
+
+        // unsafe {
+        //     let _ = ShowWindow(HWND(hwnd), SW_SHOWNOACTIVATE);
+        // }
 
         let webview = WebViewBuilder::new(&window)
             .with_html(
@@ -117,9 +119,17 @@ impl CandidateList {
                 }
                 UiEvent::Show => {
                     // let _ = ShowWindow(HWND(hwnd), SW_SHOWNOACTIVATE);
+                    // window.set_visible(true);
+                    let _ = unsafe {
+                        ShowWindow(
+                            HWND(window.hwnd() as *mut std::ffi::c_void),
+                            SW_SHOWNOACTIVATE,
+                        )
+                    };
                 }
                 UiEvent::Hide => {
                     // let _ = ShowWindow(HWND(hwnd), 0);
+                    window.set_visible(false);
                 }
             }
         });

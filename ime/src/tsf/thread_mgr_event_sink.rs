@@ -1,30 +1,25 @@
-use std::borrow::BorrowMut;
-
 use windows::core::{implement, Result};
-use windows::Win32::Foundation::HANDLE;
-use windows::Win32::Storage::FileSystem::WriteFile;
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfDocumentMgr, ITfThreadMgrEventSink, ITfThreadMgrEventSink_Impl,
 };
 
-use crate::utils::winutils::debug;
+use ipc::socket::SocketManager;
 
 use super::composition_mgr::CompositionMgr;
 use super::key_event_sink::KeyEvent;
-
 
 // イベントを受け取るクラス、編集コンテキストを作成したり、破棄したりするときに呼ばれる
 #[implement(ITfThreadMgrEventSink)]
 pub struct ThreadMgrEventSink {
     composition_mgr: CompositionMgr,
-    handle: HANDLE,
+    socket_mgr: SocketManager,
 }
 
 impl ThreadMgrEventSink {
-    pub fn new(composition_mgr: CompositionMgr, handle: HANDLE) -> Self {
+    pub fn new(composition_mgr: CompositionMgr, socket_mgr: SocketManager) -> Self {
         ThreadMgrEventSink {
             composition_mgr,
-            handle,
+            socket_mgr,
         }
     }
 }
@@ -47,26 +42,18 @@ impl ITfThreadMgrEventSink_Impl for ThreadMgrEventSink_Impl {
             return Ok(());
         }
         let context = unsafe { docmgr.unwrap().GetBase() }?;
-        self.composition_mgr.start_composition(context.clone())?;
+        if self.composition_mgr.composition.borrow().is_none() {
+            self.composition_mgr.start_composition(context)?;
+        }
         let preceding_text = self.composition_mgr.get_preceding_text()?;
 
         let message = serde_json::to_string(&KeyEvent {
             r#type: "left".to_string(),
-            message: preceding_text
+            message: preceding_text,
         })
         .unwrap();
-        let message_len = message.len();
+        self.socket_mgr.post(message)?;
 
-        let wide: Vec<u8> = message.to_string().into_bytes();
-        unsafe {
-            WriteFile(
-                self.handle,
-                Some(&wide),
-                Some((message_len as u32).borrow_mut()),
-                None,
-            )
-        }?;
-        
         Ok(())
     }
 

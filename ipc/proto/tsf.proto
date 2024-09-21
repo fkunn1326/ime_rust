@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package ipc;
+
+import "common.proto";  // Emptyメッセージをインポート
+
+message Context {
+  string context = 1;  // 文脈情報
+}
+
+message ThreadID {
+  uint32 thread_id = 1;  // TSFが動作しているwindowのスレッドID
+}
+
+service TSFService {
+  rpc UpdateContext (Context) returns (Empty);
+  rpc UpdateThreadID (ThreadID) returns (Empty);
+}

@@ -11,7 +11,7 @@ use windows::Win32::UI::TextServices::{
 
 use std::mem::ManuallyDrop;
 
-use crate::ui::ui::LocateEvent;
+use crate::ui::LocateEvent;
 use crate::utils::winutils::to_wide_16;
 
 use super::edit_session::EditSession;

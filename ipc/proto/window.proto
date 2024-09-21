@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package ipc;
+
+import "common.proto";  // Emptyメッセージをインポート
+
+message CandidateSelection {
+  int32 selected_index = 1;  // ユーザーが選択した候補のindex
+}
+
+service WindowService {
+  rpc SelectCandidate (CandidateSelection) returns (Empty);  // 空のレスポンス
+}
